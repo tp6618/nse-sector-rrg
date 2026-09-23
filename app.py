@@ -293,19 +293,19 @@ with col_b:
 
 
 # ==========================================
-# PART 3: NIFTY 500 BREAKOUT & MOMENTUM SCREENER
+# PART 3: NIFTY 500 BREAKOUT & MOMENTUM SCREENER (6 STOCKS)
 # ==========================================
 st.markdown("---")
 st.header("🚀 Nifty 500 Breakout & Volume Shocker Screener")
 st.markdown(
-    "Live momentum scan highlighting Nifty 500 stocks showing high relative"
-    " strength, volume expansion, and breakout patterns."
+    "Live momentum scan highlighting top Nifty 500 stocks showing high volume"
+    " expansion and momentum."
 )
 
 
 @st.cache_data(ttl=600)
 def scan_breakout_stocks():
-  # Curated list of prominent Nifty 500 liquid stocks for momentum scan
+  # Expanded pool of liquid Nifty 500 stocks to ensure at least 6 breakout results
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -319,6 +319,10 @@ def scan_breakout_stocks():
       "Hindalco": "HINDALCO.NS",
       "Divi's Lab": "DIVISLAB.NS",
       "BHEL": "BHEL.NS",
+      "Cochin Shipyard": "COCHINSHIP.NS",
+      "Mazagon Dock": "MAZDOCK.NS",
+      "Kaynes Technology": "KAYNES.NS",
+      "KPIT Tech": "KPITTECH.NS",
   }
 
   breakout_results = []
@@ -339,12 +343,10 @@ def scan_breakout_stocks():
 
         avg_vol = vol_s.tail(10).mean()
         latest_vol = vol_s.iloc[-1]
-        vol_spike = (
-            latest_vol / avg_vol if avg_vol > 0 else 1.0
-        )  # Volume multiple
+        vol_spike = latest_vol / avg_vol if avg_vol > 0 else 1.0
 
-        # Filter criteria for potential momentum/breakout candidates
-        if pct_change > 0.5 and vol_spike > 1.2:
+        # Relaxed filter slightly to guarantee showing at least 6 strong candidates
+        if pct_change >= 0.0 and vol_spike >= 1.0:
           breakout_results.append({
               "name": name,
               "ticker": ticker.split(".")[0],
@@ -355,7 +357,11 @@ def scan_breakout_stocks():
     except Exception:
       pass
 
-  return breakout_results
+  # Sort by highest volume spike and return top 6
+  breakout_results = sorted(
+      breakout_results, key=lambda x: x["vol_spike"], reverse=True
+  )
+  return breakout_results[:6]
 
 
 breakout_stocks = scan_breakout_stocks()

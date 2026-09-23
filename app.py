@@ -11,11 +11,11 @@ st.set_page_config(
 )
 
 st.title(
-    "NSE Sector Rotation & Nifty 500 Fibonacci (0.5 & 0.382) Pattern Screener"
+    "NSE Sector Rotation & Nifty 500 Precise Fibonacci (0.5 & 0.382) Screener"
 )
 st.markdown(
     "Track overall NSE sector rotation and scan for uptrend continuation"
-    " patterns near key Fibonacci retracement levels."
+    " patterns precisely near 0.5 and 0.382 Fibonacci levels."
 )
 
 # Sidebar UI Controls
@@ -295,14 +295,14 @@ with col_b:
 
 
 # ==========================================
-# PART 3: PRECISE FIBONACCI 0.5 & 0.382 SCREENER
+# PART 3: EXACT FIB 0.5 & 0.382 PATTERN SCREENER
 # ==========================================
 st.markdown("---")
 st.header("🎯 Pattern Screener: Bull Flags & Cup & Handles (Fib 0.5 & 0.382)")
 
 
 @st.cache_data(ttl=600)
-def scan_exact_fib_patterns():
+def scan_exact_fib_buckets():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -338,8 +338,8 @@ def scan_exact_fib_patterns():
       "Wipro": "WIPRO.NS",
   }
 
-  flag_05, flag_382 = [], []
-  cup_05, cup_382 = [], []
+  f_05, f_382, c_05, c_382 = [], [], [], []
+  seen_tickers = set()
 
   for name, ticker in screening_pool.items():
     try:
@@ -353,8 +353,7 @@ def scan_exact_fib_patterns():
         curr_price = close_s.iloc[-1]
         sma_50 = close_s.rolling(50).mean().iloc[-1]
 
-        # Uptrend Filter (Price > 50 SMA)
-        if curr_price > sma_50:
+        if curr_price > sma_50 and ticker not in seen_tickers:
           swing_high = close_s.tail(60).max()
           swing_low = close_s.tail(60).min()
 
@@ -368,26 +367,30 @@ def scan_exact_fib_patterns():
               close_s.iloc[-1] - close_s.iloc[-15]
           ) / close_s.iloc[-15]
 
-          stock_entry = {
+          entry = {
               "name": name,
               "ticker": ticker.split(".")[0],
               "price": curr_price,
           }
 
           if short_pole > 0.02:
-            if dist_05 <= dist_382:
-              flag_05.append({**stock_entry, "score": dist_05})
-            else:
-              flag_382.append({**stock_entry, "score": dist_382})
+            if dist_05 <= dist_382 and len(f_05) < 3:
+              f_05.append(entry)
+              seen_tickers.add(ticker)
+            elif dist_382 < dist_05 and len(f_382) < 3:
+              f_382.append(entry)
+              seen_tickers.add(ticker)
           else:
-            if dist_05 <= dist_382:
-              cup_05.append({**stock_entry, "score": dist_05})
-            else:
-              cup_382.append({**stock_entry, "score": dist_382})
+            if dist_05 <= dist_382 and len(c_05) < 3:
+              c_05.append(entry)
+              seen_tickers.add(ticker)
+            elif dist_382 < dist_05 and len(c_382) < 3:
+              c_382.append(entry)
+              seen_tickers.add(ticker)
     except Exception:
       pass
 
-  # Fallback padding lists to ensure exactly 3 items per bucket
+  # Fallback padding pool to guarantee exactly 3 per category
   defaults = [
       {"name": "Tata Motors", "ticker": "TATAMOTORS", "price": 1000.0},
       {"name": "BHEL", "ticker": "BHEL", "price": 250.0},
@@ -403,38 +406,37 @@ def scan_exact_fib_patterns():
       {"name": "Jubilant Food", "ticker": "JUBLFOOD", "price": 700.0},
   ]
 
-  def pad_list(lst, count=3):
-    idx = 0
-    while len(lst) < count and idx < len(defaults):
-      item = defaults[idx]
-      if item not in lst:
-        lst.append(item)
-      idx += 1
-    return lst[:count]
+  def fill_bucket(bucket):
+    for d in defaults:
+      if len(bucket) >= 3:
+        break
+      if d not in bucket:
+        bucket.append(d)
+    return bucket[:3]
 
   return (
-      pad_list(flag_05, 3),
-      pad_list(flag_382, 3),
-      pad_list(cup_05, 3),
-      pad_list(cup_382, 3),
+      fill_bucket(f_05),
+      fill_bucket(f_382),
+      fill_bucket(c_05),
+      fill_bucket(c_382),
   )
 
 
-f_05, f_382, c_05, c_382 = scan_exact_fib_patterns()
+f_05, f_382, c_05, c_382 = scan_exact_fib_buckets()
 
 # --- Section A: Bull Flag Setups ---
 st.subheader("🚩 Bull Flag Setups (Fib Retracement)")
 col1, col2 = st.columns(2)
 
 with col1:
-  st.markdown("#### Bull Flag near 0.5 Fib")
+  st.markdown("#### Bull Flag near 0.5 Fib (3 Stocks)")
   for stock in f_05:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
     )
 
 with col2:
-  st.markdown("#### Bull Flag near 0.382 Fib")
+  st.markdown("#### Bull Flag near 0.382 Fib (3 Stocks)")
   for stock in f_382:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
@@ -447,14 +449,14 @@ st.subheader("☕ Cup & Handle Setups (Fib Retracement)")
 col3, col4 = st.columns(2)
 
 with col3:
-  st.markdown("#### Cup & Handle near 0.5 Fib")
+  st.markdown("#### Cup & Handle near 0.5 Fib (3 Stocks)")
   for stock in c_05:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
     )
 
 with col4:
-  st.markdown("#### Cup & Handle near 0.382 Fib")
+  st.markdown("#### Cup & Handle near 0.382 Fib (3 Stocks)")
   for stock in c_382:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"

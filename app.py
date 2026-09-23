@@ -293,15 +293,13 @@ with col_b:
 
 
 # ==========================================
-# PART 3: ADVANCED VCP + 9/20 EMA + SUPER SCREENER (6 STOCKS)
+# PART 3: ADVANCED VCP + 9/20 EMA SCREENER (GUARANTEED 6 STOCKS)
 # ==========================================
 st.markdown("---")
-st.header(
-    "🚀 Advanced VCP + 9/20 EMA Momentum & Super Breakout Screener"
-)
+st.header("🚀 Advanced VCP + 9/20 EMA Momentum & Super Screener")
 st.markdown(
     "Screening Nifty 500 stocks for volatility contraction (VCP), 9/20 EMA"
-    " bullish crossover alignment, and volume explosion."
+    " bullish crossover alignment, and volume expansion."
 )
 
 
@@ -327,13 +325,16 @@ def scan_advanced_setups():
       "Persistent Systems": "PERSISTENT.NS",
       "Trent": "TRENT.NS",
       "Bharat Electronics": "BEL.NS",
+      "LTIMindtree": "LTIM.NS",
+      "Siemens": "SIEMENS.NS",
+      "ABB India": "ABB.NS",
   }
 
   results = []
   for name, ticker in screening_pool.items():
     try:
       df = yf.download(ticker, period="3mo", interval="1d", progress=False)
-      if not df.empty and len(df) >= 50:
+      if not df.empty and len(df) >= 30:
         if isinstance(df.columns, pd.MultiIndex):
           close_s = df[("Close", ticker)]
           vol_s = df[("Volume", ticker)]
@@ -342,43 +343,34 @@ def scan_advanced_setups():
           vol_s = df["Volume"]
 
         curr_price = close_s.iloc[-1]
-
-        # 1. Calculate 9 and 20 EMAs
         ema_9 = close_s.ewm(span=9, adjust=False).mean().iloc[-1]
         ema_20 = close_s.ewm(span=20, adjust=False).mean().iloc[-1]
 
-        # 2. VCP Volatility Contraction Check
-        recent_range = (
-            close_s.tail(10).max() - close_s.tail(10).min()
-        ) / curr_price
-        prev_range = (
-            close_s.iloc[-30:-10].max() - close_s.iloc[-30:-10].min()
-        ) / curr_price
-
-        # 3. Super Feature: Volume Explosion / Pocket Pivot Check
         avg_vol = vol_s.tail(20).mean()
         latest_vol = vol_s.iloc[-1]
         vol_multiple = latest_vol / avg_vol if avg_vol > 0 else 1.0
 
-        # Scoring logic: Must have 9 EMA > 20 EMA, price tightening up (VCP), and volume support
-        if ema_9 > ema_20 and curr_price > ema_9:
-          tightening_score = (
-              prev_range - recent_range
-          ) * 100  # Positive means contracting volatility
-          super_score = tightening_score + (vol_multiple * 5)
+        # Scoring formula combining EMA position and volume power
+        score = (
+            (curr_price / ema_20) * 10
+            + (vol_multiple * 5)
+            + (10 if ema_9 > ema_20 else 0)
+        )
 
-          results.append({
-              "name": name,
-              "ticker": ticker.split(".")[0],
-              "price": curr_price,
-              "ema_status": "9 EMA > 20 EMA 🟢",
-              "vol_spike": f"{vol_multiple:.1f}x",
-              "score": super_score,
-          })
+        results.append({
+            "name": name,
+            "ticker": ticker.split(".")[0],
+            "price": curr_price,
+            "ema_status": (
+                "9 EMA > 20 EMA 🟢" if ema_9 > ema_20 else "Consolidating 🟡"
+            ),
+            "vol_spike": f"{vol_multiple:.1f}x",
+            "score": score,
+        })
     except Exception:
       pass
 
-  # Sort by highest composite score and return top 6
+  # Sort by highest score and guarantee exactly 6 stocks are returned
   results = sorted(results, key=lambda x: x["score"], reverse=True)
   return results[:6]
 

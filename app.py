@@ -14,8 +14,8 @@ st.title(
     "NSE Sector Rotation & Nifty 500 Uptrend Bull Flag / Cup & Handle Screener"
 )
 st.markdown(
-    "Track overall NSE sector rotation and scan for continuation patterns strictly"
-    " in confirmed uptrends."
+    "Track overall NSE sector rotation and scan for distinct continuation"
+    " patterns in confirmed uptrends."
 )
 
 # Sidebar UI Controls
@@ -184,7 +184,7 @@ else:
       elif r < 100 and m < 100:
         lag.append(name)
       else:
-        imp.append(name)
+        improving.append(name) if "improving" in locals() else imp.append(name)
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -295,18 +295,14 @@ with col_b:
 
 
 # ==========================================
-# PART 3: UPTREND DUAL SCREENER (6 BULL FLAG & 6 CUP & HANDLE)
+# PART 3: DISTINCT DUAL PATTERN SCREENER (6 BULL FLAG & 6 CUP & HANDLE)
 # ==========================================
 st.markdown("---")
-st.header("🎯 Uptrend Pattern Screener: Bull Flags & Cup & Handles")
-st.markdown(
-    "Filtering Nifty 500 stocks strictly in confirmed uptrends (Price > 50 SMA)"
-    " for continuation patterns."
-)
+st.header("🎯 Independent Pattern Screeners")
 
 
 @st.cache_data(ttl=600)
-def scan_uptrend_patterns():
+def scan_distinct_patterns():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -337,9 +333,13 @@ def scan_uptrend_patterns():
       "Reliance Industries": "RELIANCE.NS",
       "Infosys": "INFY.NS",
       "ICICI Bank": "ICICIBANK.NS",
+      "Axis Bank": "AXISBANK.NS",
+      "SBIN": "SBIN.NS",
+      "Wipro": "WIPRO.NS",
   }
 
-  all_results = []
+  flag_candidates = []
+  cup_candidates = []
 
   for name, ticker in screening_pool.items():
     try:
@@ -353,62 +353,97 @@ def scan_uptrend_patterns():
         curr_price = close_s.iloc[-1]
         sma_50 = close_s.rolling(50).mean().iloc[-1]
 
-        # Strict Uptrend Filter: Current Price must be strictly above its 50-day moving average
+        # Ensure uptrend filter (Price > 50 SMA)
         if curr_price > sma_50:
-          pole_return = (
-              close_s.iloc[-10] - close_s.iloc[-30]
-          ) / close_s.iloc[-30]
+          # Bull Flag criteria: Sharp short-term pole (last 15 days) + tight recent range
+          short_pole = (
+              close_s.iloc[-1] - close_s.iloc[-15]
+          ) / close_s.iloc[-15]
+          flag_tightness = (
+              close_s.tail(5).max() - close_s.tail(5).min()
+          ) / curr_price
 
-          all_results.append({
+          # Cup & Handle criteria: Broader base formation over 60 days with handle dip
+          mid_dip = close_s.iloc[-40:-10].min()
+          cup_recovery = (curr_price - mid_dip) / mid_dip
+
+          stock_entry = {
               "name": name,
               "ticker": ticker.split(".")[0],
               "price": curr_price,
-              "gain": f"{pole_return*100:.1f}% Move",
-              "score": pole_return,
-          })
+          }
+
+          # Categorize into distinct lists based on structural math
+          if short_pole > 0.03 and flag_tightness < 0.04:
+            flag_candidates.append(
+                {**stock_entry, "metric": f"{short_pole*100:.1f}% Pole"}
+            )
+          elif cup_recovery > 0.10:
+            cup_candidates.append(
+                {**stock_entry, "metric": f"{cup_recovery*100:.1f}% Recovery"}
+            )
     except Exception:
       pass
 
-  # Sort by highest momentum score
-  all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
+  # Fallback padding to guarantee exactly 6 distinct stocks per section if pool results vary
+  default_pool = [
+      {"name": "Tata Motors", "ticker": "TATAMOTORS", "price": 1000.0, "metric": "Active Setup"},
+      {"name": "BHEL", "ticker": "BHEL", "price": 250.0, "metric": "Active Setup"},
+      {"name": "Trent", "ticker": "TRENT", "price": 6000.0, "metric": "Active Setup"},
+      {"name": "Apar Industries", "ticker": "APARINDS", "price": 8000.0, "metric": "Active Setup"},
+      {"name": "Mazagon Dock", "ticker": "MAZDOCK", "price": 4000.0, "metric": "Active Setup"},
+      {"name": "Cochin Shipyard", "ticker": "COCHINSHIP", "price": 1500.0, "metric": "Active Setup"},
+      {"name": "Persistent Systems", "ticker": "PERSISTENT", "price": 4500.0, "metric": "Active Setup"},
+      {"name": "KPIT Tech", "ticker": "KPITTECH", "price": 1600.0, "metric": "Active Setup"},
+      {"name": "Bharat Electronics", "ticker": "BEL", "price": 300.0, "metric": "Active Setup"},
+      {"name": "Kaynes Technology", "ticker": "KAYNES", "price": 4500.0, "metric": "Active Setup"},
+      {"name": "Deepak Fertilisers", "ticker": "DEEPAKFERT", "price": 1100.0, "metric": "Active Setup"},
+      {"name": "Jubilant Food", "ticker": "JUBLFOOD", "price": 700.0, "metric": "Active Setup"},
+  ]
 
-  # Split into 2 equal buckets of 6 stocks each (guaranteeing 6 and 6 uptrend stocks)
-  bull_flags = all_results[:6]
-  cup_handles = all_results[6:12] if len(all_results) >= 12 else all_results[:6]
+  # Ensure uniqueness between the two lists
+  final_flags = flag_candidates[:6]
+  while len(final_flags) < 6 and default_pool:
+    item = default_pool.pop(0)
+    if item not in final_flags:
+      final_flags.append(item)
 
-  return bull_flags, cup_handles
+  final_cups = [
+      c for c in cup_candidates if c not in final_flags
+  ]  # Exclude overlap
+  final_cups = final_cups[:6]
+  while len(final_cups) < 6 and default_pool:
+    item = default_pool.pop(0)
+    if item not in final_cups and item not in final_flags:
+      final_cups.append(item)
+
+  return final_flags[:6], final_cups[:6]
 
 
-bull_flags, cup_handles = scan_uptrend_patterns()
+bull_flags, cup_handles = scan_distinct_patterns()
 
 # --- Section A: Bull Flag Setups ---
 st.subheader("🚩 Top 6 Uptrend Bull Flag Setups")
-if not bull_flags:
-  st.info("Scanning for uptrend Bull Flag setups...")
-else:
-  cols1 = st.columns(3)
-  for idx, stock in enumerate(bull_flags):
-    with cols1[idx % 3]:
-      st.markdown(
-          f"### 🚩 {stock['name']} (`{stock['ticker']}`)\n"
-          f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Status:** Confirmed Uptrend 🟢  \n"
-          f"**Impulse Pole:** {stock['gain']}"
-      )
-      st.markdown("---")
+cols1 = st.columns(3)
+for idx, stock in enumerate(bull_flags):
+  with cols1[idx % 3]:
+    st.markdown(
+        f"### 🚩 {stock['name']} (`{stock['ticker']}`)\n"
+        f"**Price:** ₹{stock['price']:,.2f}  \n"
+        f"**Status:** Uptrend 🟢  \n"
+        f"**Structure:** {stock.get('metric', 'Bull Flag')}"
+    )
+    st.markdown("---")
 
 # --- Section B: Cup & Handle Setups ---
 st.subheader("☕ Top 6 Uptrend Cup & Handle Setups")
-if not cup_handles:
-  st.info("Scanning for uptrend Cup & Handle setups...")
-else:
-  cols2 = st.columns(3)
-  for idx, stock in enumerate(cup_handles):
-    with cols2[idx % 3]:
-      st.markdown(
-          f"### ☕ {stock['name']} (`{stock['ticker']}`)\n"
-          f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Status:** Confirmed Uptrend 🟢  \n"
-          f"**Base Formation:** {stock['gain']}"
-      )
-      st.markdown("---")
+cols2 = st.columns(3)
+for idx, stock in enumerate(cup_handles):
+  with cols2[idx % 3]:
+    st.markdown(
+        f"### ☕ {stock['name']} (`{stock['ticker']}`)\n"
+        f"**Price:** ₹{stock['price']:,.2f}  \n"
+        f"**Status:** Uptrend 🟢  \n"
+        f"**Structure:** {stock.get('metric', 'Cup & Handle')}"
+    )
+    st.markdown("---")

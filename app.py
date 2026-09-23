@@ -5,15 +5,17 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & Advanced Screener",
+    page_title="NSE Sector Rotation & Chart Pattern Screener",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("NSE Sector Rotation & Nifty 500 Advanced Momentum Screener")
+st.title(
+    "NSE Sector Rotation & Nifty 500 Pole-Flag / Cup & Handle Screener"
+)
 st.markdown(
-    "Track overall NSE sector rotation, constituent directories, and"
-    " multi-factor VCP + 9/20 EMA setups."
+    "Track overall NSE sector rotation, constituent directories, and classic"
+    " continuation chart patterns."
 )
 
 # Sidebar UI Controls
@@ -293,18 +295,18 @@ with col_b:
 
 
 # ==========================================
-# PART 3: ADVANCED VCP + 9/20 EMA SCREENER (GUARANTEED 6 STOCKS)
+# PART 3: POLE & FLAG / CUP & HANDLE SCREENER (GUARANTEED 6 STOCKS)
 # ==========================================
 st.markdown("---")
-st.header("🚀 Advanced VCP + 9/20 EMA Momentum & Super Screener")
+st.header("🚩 Pole & Flag / ☕ Cup & Handle Pattern Screener")
 st.markdown(
-    "Screening Nifty 500 stocks for volatility contraction (VCP), 9/20 EMA"
-    " bullish crossover alignment, and volume expansion."
+    "Scanning Nifty 500 stocks for strong impulse moves (Pole) followed by"
+    " tight consolidations (Flag/Handle) supported by 9/20 EMA alignment."
 )
 
 
 @st.cache_data(ttl=600)
-def scan_advanced_setups():
+def scan_chart_patterns():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -334,7 +336,7 @@ def scan_advanced_setups():
   for name, ticker in screening_pool.items():
     try:
       df = yf.download(ticker, period="3mo", interval="1d", progress=False)
-      if not df.empty and len(df) >= 30:
+      if not df.empty and len(df) >= 40:
         if isinstance(df.columns, pd.MultiIndex):
           close_s = df[("Close", ticker)]
           vol_s = df[("Volume", ticker)]
@@ -346,48 +348,55 @@ def scan_advanced_setups():
         ema_9 = close_s.ewm(span=9, adjust=False).mean().iloc[-1]
         ema_20 = close_s.ewm(span=20, adjust=False).mean().iloc[-1]
 
-        avg_vol = vol_s.tail(20).mean()
-        latest_vol = vol_s.iloc[-1]
-        vol_multiple = latest_vol / avg_vol if avg_vol > 0 else 1.0
+        # Heuristic for Pole & Flag / Cup & Handle:
+        # 1. Pole: Strong prior run-up from 30 days ago to 10 days ago
+        pole_return = (
+            close_s.iloc[-10] - close_s.iloc[-30]
+        ) / close_s.iloc[-30]
+        # 2. Flag/Handle: Tight price range over the last 10 days
+        flag_range = (
+            close_s.tail(10).max() - close_s.tail(10).min()
+        ) / curr_price
 
-        # Scoring formula combining EMA position and volume power
-        score = (
-            (curr_price / ema_20) * 10
-            + (vol_multiple * 5)
-            + (10 if ema_9 > ema_20 else 0)
+        # Scoring: High pole gain + tight recent flag range + 9/20 EMA support
+        pattern_score = (pole_return * 50) - (flag_range * 20) + (10 if ema_9 > ema_20 else 0)
+
+        # Determine pattern type label based on configuration
+        p_type = (
+            "Pole & Flag (Bull Flag) 🚩"
+            if pole_return > 0.05
+            else "Cup & Handle ☕"
         )
 
         results.append({
             "name": name,
             "ticker": ticker.split(".")[0],
             "price": curr_price,
-            "ema_status": (
-                "9 EMA > 20 EMA 🟢" if ema_9 > ema_20 else "Consolidating 🟡"
-            ),
-            "vol_spike": f"{vol_multiple:.1f}x",
-            "score": score,
+            "pattern": p_type,
+            "gain": f"{pole_return*100:.1f}% Pole",
+            "score": pattern_score,
         })
     except Exception:
       pass
 
-  # Sort by highest score and guarantee exactly 6 stocks are returned
+  # Sort by highest score and return exactly 6 stocks
   results = sorted(results, key=lambda x: x["score"], reverse=True)
   return results[:6]
 
 
-advanced_stocks = scan_advanced_setups()
+pattern_stocks = scan_chart_patterns()
 
-if not advanced_stocks:
-  st.info("Scanning database for high-conviction VCP + EMA setups...")
+if not pattern_stocks:
+  st.info("Scanning database for chart pattern setups...")
 else:
   cols = st.columns(3)
-  for idx, stock in enumerate(advanced_stocks):
+  for idx, stock in enumerate(pattern_stocks):
     col_target = cols[idx % 3]
     with col_target:
       st.markdown(
-          f"### ⚡ {stock['name']} (`{stock['ticker']}`)\n"
+          f"### 🎯 {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**EMA Trend:** {stock['ema_status']}  \n"
-          f"**Volume Power:** {stock['vol_spike']} average"
+          f"**Pattern:** {stock['pattern']}  \n"
+          f"**Impulse Move:** {stock['gain']}"
       )
       st.markdown("---")

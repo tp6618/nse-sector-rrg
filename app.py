@@ -16,7 +16,8 @@ st.set_page_config(
 st.title("NSE Sector Rotation & Live Auto-Updating Nifty 500 Screener")
 st.markdown(
     "Automatically fetches live Nifty 500 components from NSE India and scans"
-    " across custom multi-screener strategies with custom pullback ranges."
+    " across multiple screeners with liquidity, relative strength, and"
+    " pullback filters."
 )
 
 # Sidebar UI Controls
@@ -299,20 +300,18 @@ with col_b:
 
 
 # ==========================================
-# PART 3: AUTO-UPDATING LIVE NIFTY 500 MULTI-SCREENER (10-13% FROM HIGHS)
+# PART 3: AUTO UPDATE SCREENER (10-13% FROM HIGHS)
 # ==========================================
 st.markdown("---")
-st.header(
-    "🔍 Auto-Updating Live Nifty 500 Engine (10% - 13% from 52W/Swing High)"
-)
+st.header("🔍 Auto Update Screener (10-13% from Highs)")
 st.markdown(
-    "Scanning live Nifty 500 components where LTP is strictly **10% to 13%**"
-    " below their 52-week or swing high, combined with ADTV liquidity and 5"
-    " custom screeners."
+    "Automatically scanning live Nifty 500 components where LTP is strictly"
+    " **10% to 13% below** their 52-week / swing high, combined with ADTV"
+    " liquidity, relative strength, volume dry-up, and 5 custom screeners."
 )
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def get_nifty500_tickers():
   url = "https://archives.nseindia.com/content/indices/ind_nifty500list.csv"
   headers = {
@@ -354,7 +353,7 @@ def get_nifty500_tickers():
 
 
 @st.cache_data(ttl=300)
-def run_auto_screeners_10_13():
+def run_auto_update_screener():
   tickers = get_nifty500_tickers()
   results = []
 
@@ -394,17 +393,18 @@ def run_auto_screeners_10_13():
         curr_vol = vol.iloc[-1]
         prev_vol = vol.iloc[-2]
 
-        high_52w = high.max()
-        pct_below_high = (high_52w - curr_close) / high_52w
-
-        # Strict 10% to 13% Pullback Filter from High
+        # 1. 10% to 13% Pullback from 52-Week High / Swing High Check
+        high_ref = high.max()
+        pct_below_high = (high_ref - curr_close) / high_ref
         if not (0.10 <= pct_below_high <= 0.13):
           continue
 
+        # 2. Strict Liquidity (ADTV) Filter: Turnover >= 1 Crore (10,000,000 INR)
         adtv = (close * vol).tail(20).mean()
         if adtv < 10000000:
           continue
 
+        # 3. Relative Strength Filter: Stock 60-day return must beat Nifty benchmark return
         stock_return_60d = (
             (curr_close - close.iloc[-60]) / close.iloc[-60]
             if len(close) >= 60
@@ -413,6 +413,16 @@ def run_auto_screeners_10_13():
         if stock_return_60d < nifty_return_60d:
           continue
 
+        # 4. Volume Dry-up Check
+        vol_sma_20 = vol.rolling(20).mean()
+        volume_dry_up = (
+            vol.iloc[-2] < vol_sma_20.iloc[-2]
+            or vol.iloc[-3] < vol_sma_20.iloc[-3]
+        )
+        if not volume_dry_up:
+          continue
+
+        # RSI 14 calculation
         delta = close.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -420,40 +430,51 @@ def run_auto_screeners_10_13():
         rsi = 100 - (100 / (1 + rs))
         curr_rsi = rsi.iloc[-1]
 
+        # EMAs and SMAs
         ema_5 = close.ewm(span=5).mean().iloc[-1]
         ema_13 = close.ewm(span=13).mean().iloc[-1]
         ema_20 = close.ewm(span=20).mean().iloc[-1]
         ema_21 = close.ewm(span=21).mean().iloc[-1]
         ema_26 = close.ewm(span=26).mean().iloc[-1]
-        vol_sma_20 = vol.rolling(20).mean()
         sma_vol_30 = vol.tail(30).mean()
 
+        # Screener 1 Check
         s1 = (
             curr_vol > prev_vol
             and curr_close > close.iloc[-14]
             and curr_vol > 100000
             and curr_close > prev_close
         )
+
+        # Screener 2 Check
         s2 = (
-            curr_close >= high_52w * 0.85
-            and curr_close <= high_52w * 0.92
-            and 50 <= curr_rsi <= 80
+            curr_close >= high_ref * 0.95
+            and curr_close <= high_ref * 1.02
+            and 55 <= curr_rsi <= 80
         )
+
+        # Screener 3 Check
         ema_bunched = (
-            abs((curr_close - ema_5) / ema_5) * 100 <= 1.5
-            and abs((curr_close - ema_21) / ema_21) * 100 <= 1.5
+            abs((curr_close - ema_5) / ema_5) * 100 <= 1
+            and abs((curr_close - ema_13) / ema_13) * 100 <= 1
+            and abs((curr_close - ema_21) / ema_21) * 100 <= 1
+            and abs((curr_close - ema_26) / ema_26) * 100 <= 1
         )
         s3 = curr_vol > 100000 and curr_vol > sma_vol_30 and ema_bunched
+
+        # Screener 4 Check
         pole_move = (
             (close.iloc[-1] - close.iloc[-20]) / close.iloc[-20]
             if len(close) >= 20
             else 0
         )
-        s4 = curr_vol > 300000 and curr_close > 100 and pole_move > 0.02
+        s4 = curr_vol > 500000 and curr_close > 100 and pole_move > 0.04
+
+        # Screener 5 Check
         s5 = (
             curr_close > ema_20
-            and curr_rsi >= 50
-            and curr_vol >= (vol_sma_20.iloc[-1] * 1.1)
+            and curr_rsi >= 58
+            and curr_vol >= (vol_sma_20.iloc[-1] * 1.2)
             and (curr_close * curr_vol) >= 5000000
         )
 
@@ -469,14 +490,14 @@ def run_auto_screeners_10_13():
               passed_count * 20
               + (stock_return_60d * 10)
               + (vol_multiple * 5)
-              + (pct_below_high * 100)
+              + (pct_below_high * 10)
           )
 
           results.append({
               "ticker": ticker.split(".")[0],
               "price": curr_close,
-              "high_52w": high_52w,
-              "pullback": f"{pct_below_high*100:.1f}%",
+              "high_ref": high_ref,
+              "pullback_pct": f"{pct_below_high * 100:.2f}%",
               "matches": passed_count,
               "details": f"Passed {passed_count}/5 Screeners",
               "score": composite_score,
@@ -489,25 +510,26 @@ def run_auto_screeners_10_13():
   return results
 
 
-consensus_stocks_10_13 = run_auto_screeners_10_13()
+auto_stocks = run_auto_update_screener()
 
-if not consensus_stocks_10_13:
+if not auto_stocks:
   st.info(
-      "Scanning live Nifty 500 universe for 10%–13% pullbacks... No stocks"
+      "Scanning live Nifty 500 universe for 10-13% pullbacks... No stocks"
       " currently match the intersection."
   )
 else:
   st.success(
-      f"Found {len(consensus_stocks_10_13)} auto-updated consensus stocks"
-      " pulling back 10%–13% from highs!"
+      f"Found {len(auto_stocks)} high-conviction stocks in the 10-13% pullback"
+      " zone!"
   )
   cols = st.columns(3)
-  for idx, stock in enumerate(consensus_stocks_10_13[:9]):
+  for idx, stock in enumerate(auto_stocks[:9]):
     with cols[idx % 3]:
       st.markdown(
           f"### ⭐ `{stock['ticker']}`\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Pullback from High:** {stock['pullback']}  \n"
+          f"**Swing/52W High:** ₹{stock['high_ref']:,.2f}  \n"
+          f"**Pullback Depth:** {stock['pullback_pct']} below High  \n"
           f"**Status:** {stock['details']}"
       )
       st.markdown("---")

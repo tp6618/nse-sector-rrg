@@ -10,7 +10,7 @@ st.set_page_config(
 
 st.title("NSE Sector Rotation (RRG) Dashboard")
 st.markdown(
-    "Relative Rotation Graph tracking NSE sectors against the Nifty 50"
+    "Relative Rotation Graph tracking all NSE sectors against the Nifty 50"
     " benchmark."
 )
 
@@ -19,17 +19,25 @@ st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Benchmark and Sector Tickers
+# Benchmark and Comprehensive NSE Sector Tickers dictionary
 benchmark = "^NSEI"
 sectors = {
-    "IT": "^CNXIT",
     "AUTO": "^CNXAUTO",
-    "PHARMA": "^CNXPHARMA",
+    "BANK": "^NSEBANK",
+    "FIN SERVICE": "^CNXFIN",
     "FMCG": "^CNXFMCG",
+    "IT": "^CNXIT",
+    "MEDIA": "^CNXMEDIA",
     "METAL": "^CNXMETAL",
+    "PHARMA": "^CNXPHARMA",
+    "PSU BANK": "^CNXPSUBANK",
     "REALTY": "^CNXREALTY",
-    "ENERGY": "^CNXENERGY",
+    "PVT BANK": "^CNXPVTBNK",
+    "HEALTHCARE": "^CNXHEALTH",
+    "CONSR DURBL": "^CNXCONSUM",
+    "OIL & GAS": "^CNXENERGY",
     "INFRA": "^CNXINFRA",
+    "COMMODITIES": "^CNXCMDT",
 }
 
 
@@ -53,7 +61,7 @@ def fetch_data(tf):
   except Exception:
     pass
 
-  # Download each sector individually so one failure doesn't break the rest
+  # Download each sector individually to guarantee robustness
   for name, ticker in sectors.items():
     try:
       df = yf.download(
@@ -133,7 +141,7 @@ else:
         yaxis_title="RS-Momentum",
         xaxis=dict(range=[90, 110]),
         yaxis=dict(range=[90, 110]),
-        height=600,
+        height=700,
         template="plotly_white",
     )
 

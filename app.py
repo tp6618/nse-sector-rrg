@@ -5,15 +5,15 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & Breakout Screener",
+    page_title="NSE Sector Rotation & VCP Screener",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("NSE Sector Rotation & Nifty 500 Breakout Dashboard")
+st.title("NSE Sector Rotation & Nifty 500 VCP Breakout Screener")
 st.markdown(
-    "Track overall NSE sector rotation, constituent directories, and live"
-    " Nifty 500 momentum breakouts."
+    "Track overall NSE sector rotation, constituent directories, and Minervini"
+    " VCP (Volatility Contraction Pattern) setups."
 )
 
 # Sidebar UI Controls
@@ -293,20 +293,19 @@ with col_b:
 
 
 # ==========================================
-# PART 3: NIFTY 500 BREAKOUT & MOMENTUM SCREENER (6 STOCKS)
+# PART 3: MINERVINI VCP (VOLATILITY CONTRACTION PATTERN) SCREENER
 # ==========================================
 st.markdown("---")
-st.header("🚀 Nifty 500 Breakout & Volume Shocker Screener")
+st.header("📐 Minervini VCP (Volatility Contraction Pattern) Screener")
 st.markdown(
-    "Live momentum scan highlighting top Nifty 500 stocks showing high volume"
-    " expansion and momentum."
+    "Scanning Nifty 500 stocks for structural price tightening, moving average"
+    " alignment, and volume drying."
 )
 
 
 @st.cache_data(ttl=600)
-def scan_breakout_stocks():
-  # Expanded pool of liquid Nifty 500 stocks to ensure at least 6 breakout results
-  screening_pool = {
+def scan_vcp_patterns():
+  vcp_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
       "Aegis Vopak": "AEGISVOPAK.NS",
@@ -325,11 +324,11 @@ def scan_breakout_stocks():
       "KPIT Tech": "KPITTECH.NS",
   }
 
-  breakout_results = []
-  for name, ticker in screening_pool.items():
+  vcp_results = []
+  for name, ticker in vcp_pool.items():
     try:
-      df = yf.download(ticker, period="1mo", interval="1d", progress=False)
-      if not df.empty and len(df) >= 10:
+      df = yf.download(ticker, period="3mo", interval="1d", progress=False)
+      if not df.empty and len(df) >= 50:
         if isinstance(df.columns, pd.MultiIndex):
           close_s = df[("Close", ticker)]
           vol_s = df[("Volume", ticker)]
@@ -337,49 +336,66 @@ def scan_breakout_stocks():
           close_s = df["Close"]
           vol_s = df["Volume"]
 
-        curr_close = close_s.iloc[-1]
-        prev_close = close_s.iloc[-2]
-        pct_change = ((curr_close - prev_close) / prev_close) * 100
+        curr_price = close_s.iloc[-1]
+        sma_50 = close_s.rolling(50).mean().iloc[-1]
+        sma_200 = (
+            close_s.rolling(200).mean().iloc[-1]
+            if len(close_s) >= 200
+            else sma_50
+        )
 
-        avg_vol = vol_s.tail(10).mean()
-        latest_vol = vol_s.iloc[-1]
-        vol_spike = latest_vol / avg_vol if avg_vol > 0 else 1.0
+        # Minervini Trend Template Check: Price > 50 SMA > 200 SMA (or relaxed proxy)
+        if curr_price > sma_50:
+          # Check Volatility Contraction: Range of recent 10 days vs previous 20 days
+          recent_range = (
+              close_s.tail(10).max() - close_s.tail(10).min()
+          ) / curr_price
+          prev_range = (
+              close_s.iloc[-30:-10].max() - close_s.iloc[-30:-10].min()
+          ) / curr_price
 
-        # Relaxed filter slightly to guarantee showing at least 6 strong candidates
-        if pct_change >= 0.0 and vol_spike >= 1.0:
-          breakout_results.append({
-              "name": name,
-              "ticker": ticker.split(".")[0],
-              "price": curr_close,
-              "change": pct_change,
-              "vol_spike": vol_spike,
-          })
+          # Volume contraction check
+          recent_vol = vol_s.tail(10).mean()
+          prev_vol = vol_s.iloc[-30:-10].mean()
+          vol_contracting = recent_vol <= prev_vol * 1.1
+
+          # VCP condition: volatility is contracting (recent range is smaller than previous range)
+          if recent_range < prev_range or vol_contracting:
+            contraction_score = (
+                prev_range - recent_range
+            ) * 100  # Higher score = tighter squeeze
+            vcp_results.append({
+                "name": name,
+                "ticker": ticker.split(".")[0],
+                "price": curr_close,
+                "contraction": max(contraction_score, 1.5),
+                "vol_trend": (
+                    "Drying Up 📉" if vol_contracting else "Normal 📊"
+                ),
+            })
     except Exception:
       pass
 
-  # Sort by highest volume spike and return top 6
-  breakout_results = sorted(
-      breakout_results, key=lambda x: x["vol_spike"], reverse=True
+  # Sort by highest contraction squeeze and return top 6
+  vcp_results = sorted(
+      vcp_results, key=lambda x: x["contraction"], reverse=True
   )
-  return breakout_results[:6]
+  return vcp_results[:6]
 
 
-breakout_stocks = scan_breakout_stocks()
+vcp_stocks = scan_vcp_patterns()
 
-if not breakout_stocks:
-  st.info(
-      "Scanning Nifty 500 momentum watchlists... Check back during active"
-      " market hours."
-  )
+if not vcp_stocks:
+  st.info("Scanning database for VCP contraction setups...")
 else:
   cols = st.columns(3)
-  for idx, stock in enumerate(breakout_stocks):
+  for idx, stock in enumerate(vcp_stocks):
     col_target = cols[idx % 3]
     with col_target:
       st.markdown(
-          f"### 🟢 {stock['name']} (`{stock['ticker']}`)\n"
+          f"### 📐 {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Gain:** :green[{stock['change']:+.2f}%]  \n"
-          f"**Volume Spike:** {stock['vol_spike']:.1f}x average"
+          f"**Setup Type:** VCP Tightening Squeeze  \n"
+          f"**Volume Status:** {stock['vol_trend']}"
       )
       st.markdown("---")

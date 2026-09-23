@@ -16,7 +16,7 @@ st.set_page_config(
 st.title("NSE Sector Rotation & Dual-Partition Live Nifty 500 Screener")
 st.markdown(
     "Automatically fetches live Nifty 500 components from NSE India and scans"
-    " across 5 custom screeners for both near-highs (0-10%) and pullback (5-7%)"
+    " across 5 custom screeners for both near-highs (0-10%) and pullback (7-12%)"
     " setups."
 )
 
@@ -394,7 +394,7 @@ def run_dual_screeners():
 
         # Check which partition zone this stock falls into
         is_near_highs = pct_below_high <= 0.10
-        is_pullback_zone = 0.05 <= pct_below_high <= 0.07
+        is_pullback_zone = 0.07 <= pct_below_high <= 0.12
 
         if not (is_near_highs or is_pullback_zone):
           continue
@@ -535,12 +535,12 @@ else:
 
 st.markdown("\n")
 
-# --- Partition 2: Pullback Zone (5-7%) ---
-st.subheader("📉 Partition 2: Auto Update Screener (5-7% Pullback Zone)")
+# --- Partition 2: Pullback Zone (7-12%) ---
+st.subheader("📉 Partition 2: Auto Update Screener (7-12% Pullback Zone)")
 if not pullbacks:
-  st.info("No stocks currently match the 5-7% pullback zone criteria.")
+  st.info("No stocks currently match the 7-12% pullback zone criteria.")
 else:
-  st.success(f"Found {len(pullbacks)} stocks in the 5-7% pullback zone!")
+  st.success(f"Found {len(pullbacks)} stocks in the 7-12% pullback zone!")
   cols2 = st.columns(3)
   for idx, stock in enumerate(pullbacks[:9]):
     with cols2[idx % 3]:

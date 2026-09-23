@@ -38,17 +38,39 @@ def fetch_data(tf):
   period = "1y" if tf == "Daily" else "2y"
   interval = "1d" if tf == "Daily" else "1wk"
 
-  all_tickers = list(sectors.values()) + [benchmark]
+  data_dict = {}
 
-  df = yf.download(
-      all_tickers, period=period, interval=interval, progress=False
-  )["Close"]
+  # Download benchmark first
+  try:
+    b_df = yf.download(
+        benchmark, period=period, interval=interval, progress=False
+    )
+    if not b_df.empty:
+      if isinstance(b_df.columns, pd.MultiIndex):
+        data_dict[benchmark] = b_df[("Close", benchmark)].squeeze()
+      else:
+        data_dict[benchmark] = b_df["Close"].squeeze()
+  except Exception:
+    pass
 
-  if isinstance(df.columns, pd.MultiIndex):
-    df.columns = df.columns.get_level_values(0)
+  # Download each sector individually so one failure doesn't break the rest
+  for name, ticker in sectors.items():
+    try:
+      df = yf.download(
+          ticker, period=period, interval=interval, progress=False
+      )
+      if not df.empty:
+        if isinstance(df.columns, pd.MultiIndex):
+          close_series = df[("Close", ticker)]
+        else:
+          close_series = df["Close"]
+        data_dict[name] = close_series.squeeze()
+    except Exception:
+      pass
 
-  df.dropna(how="all", inplace=True)
-  return df
+  combined_df = pd.DataFrame(data_dict)
+  combined_df.dropna(inplace=True)
+  return combined_df
 
 
 # Load Data
@@ -66,57 +88,44 @@ else:
   ratio_df = pd.DataFrame(index=data.index)
   mom_df = pd.DataFrame(index=data.index)
 
-  for name, ticker in sectors.items():
-    if ticker in data.columns:
-      sec_series = data[ticker]
-      temp_df = pd.concat([sec_series, bench_series], axis=1).dropna()
-      if len(temp_df) > 14:
-        rs = temp_df.iloc[:, 0] / temp_df.iloc[:, 1]
-        sma_rs = rs.rolling(window=14).mean()
-        ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
-        momentum = 100 + ratio.diff(1)
-        ratio_df[name] = ratio
-        mom_df[name] = momentum
+  for name in sectors.keys():
+    if name in data.columns:
+      sec_series = data[name]
+      rs = sec_series / bench_series
+      sma_rs = rs.rolling(window=14).mean()
+      ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
+      momentum = 100 + ratio.diff(1)
+      ratio_df[name] = ratio
+      mom_df[name] = momentum
 
-  ratio_df.dropna(how="all", inplace=True)
-  mom_df.dropna(how="all", inplace=True)
+  ratio_df.dropna(inplace=True)
+  mom_df.dropna(inplace=True)
 
-  # Check if dataframes are empty to prevent IndexError
   if ratio_df.empty or mom_df.empty:
-    st.warning(
-        "Not enough overlapping historical data points found for these"
-        " parameters. Try toggling between Daily and Weekly views."
-    )
+    st.warning("Not enough overlapping data found. Try toggling timeframe.")
   else:
-    # Forward fill or drop NaNs safely for plotting
-    ratio_df.ffill(inplace=True)
-    mom_df.ffill(inplace=True)
-    ratio_df.dropna(inplace=True)
-    mom_df.dropna(inplace=True)
-
     # Build Plotly RRG Chart
     fig = go.Figure()
 
     fig.add_hline(y=100, line_dash="dash", line_color="gray")
     fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
-    for name in sectors.keys():
-      if name in ratio_df.columns and not ratio_df[name].empty:
-        x_vals = ratio_df[name].tail(tail_length)
-        y_vals = mom_df[name].tail(tail_length)
+    for name in ratio_df.columns:
+      x_vals = ratio_df[name].tail(tail_length)
+      y_vals = mom_df[name].tail(tail_length)
 
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals,
-                y=y_vals,
-                mode="lines+markers+text",
-                name=name,
-                text=[""] * (len(x_vals) - 1) + [name],
-                textposition="top center",
-                line=dict(width=2),
-                marker=dict(size=[6] * (len(x_vals) - 1) + [12]),
-            )
-        )
+      fig.add_trace(
+          go.Scatter(
+              x=x_vals,
+              y=y_vals,
+              mode="lines+markers+text",
+              name=name,
+              text=[""] * (len(x_vals) - 1) + [name],
+              textposition="top center",
+              line=dict(width=2),
+              marker=dict(size=[6] * (len(x_vals) - 1) + [12]),
+          )
+      )
 
     fig.update_layout(
         title=f"Sector Rotation Graph — {timeframe} View",
@@ -139,18 +148,17 @@ else:
 
     leading, weakening, lagging, improving = [], [], [], []
 
-    for name in sectors.keys():
-      if name in ratio_df.columns:
-        r = latest_ratios[name]
-        m = latest_moms[name]
-        if r >= 100 and m >= 100:
-          leading.append(name)
-        elif r >= 100 and m < 100:
-          weakening.append(name)
-        elif r < 100 and m < 100:
-          lagging.append(name)
-        else:
-          improving.append(name)
+    for name in ratio_df.columns:
+      r = latest_ratios[name]
+      m = latest_moms[name]
+      if r >= 100 and m >= 100:
+        leading.append(name)
+      elif r >= 100 and m < 100:
+        weakening.append(name)
+      elif r < 100 and m < 100:
+        lagging.append(name)
+      else:
+        improving.append(name)
 
     col1, col2, col3, col4 = st.columns(4)
 

@@ -10,8 +10,8 @@ st.set_page_config(
 
 st.title("NSE Sector Rotation (RRG) Dashboard")
 st.markdown(
-    "Relative Rotation Graph tracking all NSE sectors against the Nifty 50"
-    " benchmark."
+    "Relative Rotation Graph tracking all NSE sectors & top stocks against the"
+    " Nifty 50 benchmark."
 )
 
 # Sidebar UI Controls
@@ -40,6 +40,31 @@ sectors = {
     "COMMODITIES": "^CNXCMDT",
 }
 
+# Top representative stocks for each sector (Yahoo Finance NSE format)
+sector_stocks = {
+    "AUTO": ["TATAMOTORS.NS", "M&M.NS", "MARUTI.NS", "BAJAJ-AUTO.NS"],
+    "BANK": ["HDFCBANK.NS", "ICICIBANK.NS", "AXISBANK.NS", "KOTAKBANK.NS"],
+    "FIN SERVICE": ["BAJFINANCE.NS", "SBILIFE.NS", "HDFCLIFE.NS", "CHOLAFIN.NS"],
+    "FMCG": ["ITC.NS", "HINDUNILVR.NS", "NESTLEIND.NS", "BRITANNIA.NS"],
+    "IT": ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS"],
+    "MEDIA": ["SUNTV.NS", "ZEEL.NS", "PVRINOX.NS"],
+    "METAL": ["TATASTEEL.NS", "HINDALCO.NS", "JSWSTEEL.NS", "VEDL.NS"],
+    "PHARMA": ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS"],
+    "PSU BANK": ["SBIN.NS", "PNB.NS", "BANKBARODA.NS", "CANBK.NS"],
+    "REALTY": ["DLF.NS", "GODREJPROP.NS", "OBEROIRLTY.NS", "PHOENIXLTD.NS"],
+    "PVT BANK": [
+        "HDFCBANK.NS",
+        "ICICIBANK.NS",
+        "AXISBANK.NS",
+        "INDUSINDBK.NS",
+    ],
+    "HEALTHCARE": ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "APOLLOHOSP.NS"],
+    "CONSR DURBL": ["TITAN.NS", "HAVELLS.NS", "VOLTAS.NS", "ASIANPAINT.NS"],
+    "OIL & GAS": ["RELIANCE.NS", "ONGC.NS", "BPCL.NS", "IOC.NS"],
+    "INFRA": ["LT.NS", "ADANIPORTS.NS", "NTPC.NS", "POWERGRID.NS"],
+    "COMMODITIES": ["TATASTEEL.NS", "HINDALCO.NS", "JSWSTEEL.NS", "UPL.NS"],
+}
+
 
 @st.cache_data(ttl=3600)
 def fetch_data(tf):
@@ -48,7 +73,6 @@ def fetch_data(tf):
 
   data_dict = {}
 
-  # Download benchmark first
   try:
     b_df = yf.download(
         benchmark, period=period, interval=interval, progress=False
@@ -61,7 +85,6 @@ def fetch_data(tf):
   except Exception:
     pass
 
-  # Download each sector individually to guarantee robustness
   for name, ticker in sectors.items():
     try:
       df = yf.download(
@@ -115,11 +138,10 @@ else:
     # Build Plotly RRG Chart
     fig = go.Figure()
 
-    # Quadrant reference lines centered at 100
     fig.add_hline(y=100, line_dash="dash", line_color="gray")
     fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
-    # Add Quadrant Background Watermark Labels
+    # Add Quadrant Background Watermarks
     fig.add_annotation(
         x=107,
         y=108,
@@ -149,7 +171,6 @@ else:
         font=dict(size=20, color="rgba(255, 193, 7, 0.35)"),
     )
 
-    # Plot each sector's trailing path and current position dot
     for name in ratio_df.columns:
       x_vals = ratio_df[name].tail(tail_length)
       y_vals = mom_df[name].tail(tail_length)
@@ -221,3 +242,39 @@ else:
       st.markdown("#### 🔴 Lagging")
       for s in lagging:
         st.markdown(f"- **{s}**")
+
+    # --- TOP STOCKS PER SECTOR SECTION ---
+    st.markdown("---")
+    st.subheader("🚀 Top Stocks by Sector")
+
+    # Let users pick a sector to view its top stocks
+    selected_sec_stocks = st.selectbox(
+        "Select a Sector to View Top Stocks:", list(sector_stocks.keys())
+    )
+
+    if selected_sec_stocks in sector_stocks:
+      tickers_list = sector_stocks[selected_sec_stocks]
+      st.write(
+          f"Showing top constituent stocks for **{selected_sec_stocks}**:"
+      )
+
+      stock_data = []
+      for t in tickers_list:
+        try:
+          stk = yf.Ticker(t)
+          hist = stk.history(period="5d")
+          if not hist.empty:
+            curr_price = hist["Close"].iloc[-1]
+            prev_price = hist["Close"].iloc[-2]
+            change_pct = ((curr_price - prev_price) / prev_price) * 100
+            stock_data.append({
+                "Stock": t.replace(".NS", ""),
+                "Price (₹)": round(curr_price, 2),
+                "Change (%)": round(change_pct, 2),
+            })
+        except Exception:
+          stock_data.append({"Stock": t.replace(".NS", ""), "Price (₹)": "N/A", "Change (%)": "N/A"})
+
+      if stock_data:
+        df_stocks = pd.DataFrame(stock_data)
+        st.dataframe(df_stocks, use_container_width=True, hide_index=True)

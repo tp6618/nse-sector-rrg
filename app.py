@@ -1,3 +1,5 @@
+import urllib.request
+import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -5,14 +7,15 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & Stock Directory",
+    page_title="NSE Sector Rotation & Live News",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("NSE Sector Rotation & Constituent Directory")
+st.title("NSE Sector Rotation & Live Market News")
 st.markdown(
-    "Track overall NSE sector rotation and view constituent stocks by sector."
+    "Track overall NSE sector rotation, view constituent stocks, and get"
+    " real-time news updates."
 )
 
 # Sidebar UI Controls
@@ -208,7 +211,6 @@ else:
 st.markdown("---")
 st.header("📋 Sector Constituent Stocks Directory")
 
-# Comprehensive database mapping sectors to their major constituent stocks
 sector_stocks_db = {
     "IT": [
         "TCS (TCS.NS)",
@@ -271,22 +273,6 @@ sector_stocks_db = {
         "Bank of Baroda (BANKBARODA.NS)",
         "Punjab National Bank (PNB.NS)",
     ],
-    "REALTY": [
-        "DLF (DLF.NS)",
-        "Godrej Properties (GODREJPROP.NS)",
-        "Oberoi Realty (OBEROIRLTY.NS)",
-        "Prestige Estates (PRESTIGE.NS)",
-        "Phoenix Mills (PHOENIXLTD.NS)",
-    ],
-    "ENERGY / OIL & GAS": [
-        "Reliance Industries (RELIANCE.NS)",
-        "ONGC (ONGC.NS)",
-        "NTPC (NTPC.NS)",
-        "Power Grid Corp (POWERGRID.NS)",
-        "BPCL (BPCL.NS)",
-        "IOC (IOC.NS)",
-        "GAIL (GAIL.NS)",
-    ],
 }
 
 selected_directory_sector = st.selectbox(
@@ -296,7 +282,6 @@ selected_directory_sector = st.selectbox(
 st.markdown(f"### Stocks in {selected_directory_sector} Sector:")
 stocks_list = sector_stocks_db[selected_directory_sector]
 
-# Display stocks in clean columns or bullet lists
 col_a, col_b = st.columns(2)
 half_len = (len(stocks_list) + 1) // 2
 
@@ -307,3 +292,61 @@ with col_a:
 with col_b:
   for stock in stocks_list[half_len:]:
     st.markdown(f"✅ {stock}")
+
+
+# ==========================================
+# PART 3: NEWS STOCKS (REAL-TIME FEED)
+# ==========================================
+st.markdown("---")
+st.header("📰 NEWS Stocks (Nifty 500 Real-Time Feed)")
+st.markdown(
+    "Real-time news updates and headlines regarding Nifty 500 and NSE"
+    " constituent stocks."
+)
+
+
+@st.cache_data(ttl=600)  # Refresh news cache every 10 minutes
+def fetch_realtime_news():
+  news_items = []
+  try:
+    # Google News RSS feed for Nifty 500 / NSE stocks
+    rss_url = "https://news.google.com/rss/search?q=NSE+Nifty+500+stocks+news&hl=en-IN&gl=IN&ceid=IN:en"
+    req = urllib.request.Request(
+        rss_url, headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(req) as response:
+      xml_data = response.read()
+      root = ET.fromstring(xml_data)
+      channel = root.find("channel")
+      if channel is not None:
+        for item in channel.findall("item")[:15]:  # Top 15 news items
+          title = item.find("title")
+          link = item.find("link")
+          pub_date = item.find("pubDate")
+
+          title_text = title.text if title is not None else "No Title"
+          link_text = link.text if link is not None else "#"
+          date_text = pubDate.text if pubDate is not None else ""
+
+          news_items.append(
+              {"title": title_text, "link": link_text, "date": date_text}
+          )
+  except Exception as e:
+    print(f"Error fetching news: {e}")
+  return news_items
+
+
+live_news = fetch_realtime_news()
+
+if not live_news:
+  st.info(
+      "Live news feed currently unavailable. Please check back shortly or verify"
+      " network connection."
+  )
+else:
+  for idx, news in enumerate(live_news):
+    with st.container():
+      st.markdown(f"**{idx+1}. [{news['title']}]({news['link']})**")
+      if news["date"]:
+        st.caption(f"Published: {news['date']}")
+      st.markdown("---")

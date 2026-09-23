@@ -115,9 +115,41 @@ else:
     # Build Plotly RRG Chart
     fig = go.Figure()
 
+    # Quadrant reference lines centered at 100
     fig.add_hline(y=100, line_dash="dash", line_color="gray")
     fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
+    # Add Quadrant Background Watermark Labels
+    fig.add_annotation(
+        x=107,
+        y=108,
+        text="<b>LEADING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(40, 167, 69, 0.25)"),
+    )
+    fig.add_annotation(
+        x=93,
+        y=108,
+        text="<b>IMPROVING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(0, 123, 255, 0.25)"),
+    )
+    fig.add_annotation(
+        x=93,
+        y=92,
+        text="<b>LAGGING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(220, 53, 69, 0.25)"),
+    )
+    fig.add_annotation(
+        x=107,
+        y=92,
+        text="<b>WEAKENING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(255, 193, 7, 0.35)"),
+    )
+
+    # Plot each sector's trailing path and current position dot
     for name in ratio_df.columns:
       x_vals = ratio_df[name].tail(tail_length)
       y_vals = mom_df[name].tail(tail_length)

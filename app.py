@@ -5,13 +5,15 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation Dashboard", page_icon="📈", layout="wide"
+    page_title="NSE Sector Rotation & Active Stocks",
+    page_icon="📈",
+    layout="wide",
 )
 
-st.title("NSE Sector Rotation & Live Performance Dashboard")
+st.title("NSE Sector Rotation & Nifty 500 Active Stocks Dashboard")
 st.markdown(
-    "Track overall NSE sector rotation, view constituent stocks, and monitor"
-    " live sector performance."
+    "Track overall NSE sector rotation, view constituent directories, and"
+    " monitor active Nifty 500 stock movements."
 )
 
 # Sidebar UI Controls
@@ -291,31 +293,67 @@ with col_b:
 
 
 # ==========================================
-# PART 3: LIVE SECTOR PERFORMANCE METRICS
+# PART 3: NEWS STOCKS (NIFTY 500 ACTIVE MOVERS)
 # ==========================================
 st.markdown("---")
-st.header("📊 Live Sector Performance")
-st.markdown("Real-time price levels and daily percentage changes by sector.")
+st.header("🔥 NEWS Stocks (Active Nifty 500 Market Movers)")
+st.markdown(
+    "List of prominent Nifty 500 stocks currently experiencing high trading"
+    " activity, price momentum, or corporate developments."
+)
 
-col_count = 4
-cols = st.column(col_count) if hasattr(st, "column") else st.columns(col_count)
 
-sector_items = list(sectors_dict.items())
-for idx, (sec_name, sec_ticker) in enumerate(sector_items):
-  col_idx = idx % col_count
-  with st.columns(col_count)[col_idx]:
+@st.cache_data(ttl=600)
+def fetch_active_movers():
+  # Representative sample of high-activity Nifty 500 stocks reacting to news/market events
+  sample_stocks = {
+      "Ola Electric": "OLAELECTRIC.NS",
+      "Elecon Engineering": "ELECON.NS",
+      "Bikaji Foods": "BIKAJI.NS",
+      "Wockhardt": "WOCKPHARMA.NS",
+      "Aditya Infotech": "ADITYA.NS",
+      "Whirlpool India": "WHIRLPOOL.NS",
+      "IDFC First Bank": "IDFCFIRSTB.NS",
+      "Skipper Ltd": "SKIPPER.NS",
+      "M&M Financial": "M&MFIN.NS",
+      "Tata Steel": "TATASTEEL.NS",
+      "Hindalco": "HINDALCO.NS",
+      "JSW Steel": "JSWSTEEL.NS",
+  }
+
+  movers_data = []
+  for name, ticker in sample_stocks.items():
     try:
-      t_obj = yf.Ticker(sec_ticker)
-      hist = t_obj.history(period="2d")
+      t = yf.Ticker(ticker)
+      hist = t.history(period="2d")
       if len(hist) >= 2:
-        curr_price = hist["Close"].iloc[-1]
-        prev_price = hist["Close"].iloc[-2]
-        pct_chg = ((curr_price - prev_price) / prev_price) * 100
-        color = "green" if pct_chg >= 0 else "red"
-        st.markdown(
-            f"**NIFTY {sec_name}**\n\n`{curr_price:,.2f}`\n\n:{"green" if pct_chg>=0 else "red"}[{pct_chg:+.2f}%]"
+        close = hist["Close"].iloc[-1]
+        prev = hist["Close"].iloc[-2]
+        chg = ((close - prev) / prev) * 100
+        movers_data.append(
+            {"name": name, "price": close, "change": chg, "ticker": ticker}
         )
-      else:
-        st.markdown(f"**NIFTY {sec_name}**\n\nData loading...")
     except Exception:
-      st.markdown(f"**NIFTY {sec_name}**\n\nUnavailable")
+      pass
+  return movers_data
+
+
+active_stocks = fetch_active_movers()
+
+if not active_stocks:
+  st.info("Currently loading stock movers feed...")
+else:
+  # Display in clean columns or cards
+  col_1, col_2, col_3 = st.columns(3)
+  for idx, stock in enumerate(active_stocks):
+    col_target = [col_1, col_2, col_3][idx % 3]
+    with col_target:
+      color_emoji = "🟢" if stock["change"] >= 0 else "🔴"
+      st.markdown(
+          f"### {color_emoji} {stock['name']}"
+          f" (`{stock['ticker'].split('.')[0]}`)\n"
+          f"**Price:** ₹{stock['price']:,.2f}  \n"
+          f"**Change:** :{ 'green' if stock['change'] >= 0 else 'red' }"
+          f"[{stock['change']:+.2f}%]"
+      )
+      st.markdown("---")

@@ -7,17 +7,16 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="52-Week High Multi-Screener Engine",
+    page_title="Auto-Updating Live Nifty 500 Multi-Screener",
     page_icon="📈",
     layout="wide",
 )
 
-st.title(
-    "NSE Sector Rotation & Nifty 500 52-Week High Multi-Screener Dashboard"
-)
+st.title("NSE Sector Rotation & Live Auto-Updating Nifty 500 Screener")
 st.markdown(
-    "Scanning live Nifty 500 stocks near 52-week highs across 5 custom screeners"
-    " with ADTV liquidity & Relative Strength filters."
+    "Automatically fetches live Nifty 500 components from NSE India and scans"
+    " across 5 custom screeners with 52-week high, ADTV liquidity, and"
+    " Relative Strength filters."
 )
 
 # Sidebar UI Controls
@@ -297,14 +296,14 @@ with col_b:
 
 
 # ==========================================
-# PART 3: 52-WEEK HIGH MULTI-SCREENER ENGINE
+# PART 3: AUTO-UPDATING LIVE NIFTY 500 MULTI-SCREENER
 # ==========================================
 st.markdown("---")
-st.header("🔍 52-Week High Multi-Screener Engine (5 Rules + Near Highs)")
+st.header("🔍 Auto-Updating Live Nifty 500 Multi-Screener Engine")
 st.markdown(
-    "Scanning live Nifty 500 components strictly near their 52-week highs (within"
-    " 10%), filtering for ADTV liquidity, relative strength, and 5 custom"
-    " screeners."
+    "Automatically fetching live components from NSE India, scanning near"
+    " 52-week highs, verifying ADTV liquidity, relative strength, volume"
+    " dry-ups, and 5 custom screeners."
 )
 
 
@@ -350,7 +349,7 @@ def get_nifty500_tickers():
 
 
 @st.cache_data(ttl=600)
-def run_52w_high_screeners():
+def run_auto_screeners():
   tickers = get_nifty500_tickers()
   results = []
 
@@ -484,17 +483,17 @@ def run_52w_high_screeners():
   return results
 
 
-consensus_stocks = run_52w_high_screeners()
+consensus_stocks = run_auto_screeners()
 
 if not consensus_stocks:
   st.info(
-      "Scanning live Nifty 500 universe near 52W Highs... No stocks currently"
-      " match the intersection."
+      "Scanning live Nifty 500 universe... No stocks currently match the"
+      " intersection."
   )
 else:
   st.success(
-      f"Found {len(consensus_stocks)} high-conviction consensus stocks near"
-      " their 52-week highs!"
+      f"Found {len(consensus_stocks)} high-conviction auto-updated consensus"
+      " stocks!"
   )
   cols = st.columns(3)
   for idx, stock in enumerate(consensus_stocks[:9]):

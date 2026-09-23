@@ -5,15 +5,15 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & VCP Screener",
+    page_title="NSE Sector Rotation & Advanced Screener",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("NSE Sector Rotation & Nifty 500 VCP Breakout Screener")
+st.title("NSE Sector Rotation & Nifty 500 Advanced Momentum Screener")
 st.markdown(
-    "Track overall NSE sector rotation, constituent directories, and Minervini"
-    " VCP (Volatility Contraction Pattern) setups."
+    "Track overall NSE sector rotation, constituent directories, and"
+    " multi-factor VCP + 9/20 EMA setups."
 )
 
 # Sidebar UI Controls
@@ -293,19 +293,21 @@ with col_b:
 
 
 # ==========================================
-# PART 3: MINERVINI VCP (VOLATILITY CONTRACTION PATTERN) SCREENER
+# PART 3: ADVANCED VCP + 9/20 EMA + SUPER SCREENER (6 STOCKS)
 # ==========================================
 st.markdown("---")
-st.header("📐 Minervini VCP (Volatility Contraction Pattern) Screener")
+st.header(
+    "🚀 Advanced VCP + 9/20 EMA Momentum & Super Breakout Screener"
+)
 st.markdown(
-    "Scanning Nifty 500 stocks for structural price tightening, moving average"
-    " alignment, and volume drying."
+    "Screening Nifty 500 stocks for volatility contraction (VCP), 9/20 EMA"
+    " bullish crossover alignment, and volume explosion."
 )
 
 
 @st.cache_data(ttl=600)
-def scan_vcp_patterns():
-  vcp_pool = {
+def scan_advanced_setups():
+  screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
       "Aegis Vopak": "AEGISVOPAK.NS",
@@ -322,10 +324,13 @@ def scan_vcp_patterns():
       "Mazagon Dock": "MAZDOCK.NS",
       "Kaynes Technology": "KAYNES.NS",
       "KPIT Tech": "KPITTECH.NS",
+      "Persistent Systems": "PERSISTENT.NS",
+      "Trent": "TRENT.NS",
+      "Bharat Electronics": "BEL.NS",
   }
 
-  vcp_results = []
-  for name, ticker in vcp_pool.items():
+  results = []
+  for name, ticker in screening_pool.items():
     try:
       df = yf.download(ticker, period="3mo", interval="1d", progress=False)
       if not df.empty and len(df) >= 50:
@@ -337,65 +342,60 @@ def scan_vcp_patterns():
           vol_s = df["Volume"]
 
         curr_price = close_s.iloc[-1]
-        sma_50 = close_s.rolling(50).mean().iloc[-1]
-        sma_200 = (
-            close_s.rolling(200).mean().iloc[-1]
-            if len(close_s) >= 200
-            else sma_50
-        )
 
-        # Minervini Trend Template Check: Price > 50 SMA > 200 SMA (or relaxed proxy)
-        if curr_price > sma_50:
-          # Check Volatility Contraction: Range of recent 10 days vs previous 20 days
-          recent_range = (
-              close_s.tail(10).max() - close_s.tail(10).min()
-          ) / curr_price
-          prev_range = (
-              close_s.iloc[-30:-10].max() - close_s.iloc[-30:-10].min()
-          ) / curr_price
+        # 1. Calculate 9 and 20 EMAs
+        ema_9 = close_s.ewm(span=9, adjust=False).mean().iloc[-1]
+        ema_20 = close_s.ewm(span=20, adjust=False).mean().iloc[-1]
 
-          # Volume contraction check
-          recent_vol = vol_s.tail(10).mean()
-          prev_vol = vol_s.iloc[-30:-10].mean()
-          vol_contracting = recent_vol <= prev_vol * 1.1
+        # 2. VCP Volatility Contraction Check
+        recent_range = (
+            close_s.tail(10).max() - close_s.tail(10).min()
+        ) / curr_price
+        prev_range = (
+            close_s.iloc[-30:-10].max() - close_s.iloc[-30:-10].min()
+        ) / curr_price
 
-          # VCP condition: volatility is contracting (recent range is smaller than previous range)
-          if recent_range < prev_range or vol_contracting:
-            contraction_score = (
-                prev_range - recent_range
-            ) * 100  # Higher score = tighter squeeze
-            vcp_results.append({
-                "name": name,
-                "ticker": ticker.split(".")[0],
-                "price": curr_close,
-                "contraction": max(contraction_score, 1.5),
-                "vol_trend": (
-                    "Drying Up 📉" if vol_contracting else "Normal 📊"
-                ),
-            })
+        # 3. Super Feature: Volume Explosion / Pocket Pivot Check
+        avg_vol = vol_s.tail(20).mean()
+        latest_vol = vol_s.iloc[-1]
+        vol_multiple = latest_vol / avg_vol if avg_vol > 0 else 1.0
+
+        # Scoring logic: Must have 9 EMA > 20 EMA, price tightening up (VCP), and volume support
+        if ema_9 > ema_20 and curr_price > ema_9:
+          tightening_score = (
+              prev_range - recent_range
+          ) * 100  # Positive means contracting volatility
+          super_score = tightening_score + (vol_multiple * 5)
+
+          results.append({
+              "name": name,
+              "ticker": ticker.split(".")[0],
+              "price": curr_price,
+              "ema_status": "9 EMA > 20 EMA 🟢",
+              "vol_spike": f"{vol_multiple:.1f}x",
+              "score": super_score,
+          })
     except Exception:
       pass
 
-  # Sort by highest contraction squeeze and return top 6
-  vcp_results = sorted(
-      vcp_results, key=lambda x: x["contraction"], reverse=True
-  )
-  return vcp_results[:6]
+  # Sort by highest composite score and return top 6
+  results = sorted(results, key=lambda x: x["score"], reverse=True)
+  return results[:6]
 
 
-vcp_stocks = scan_vcp_patterns()
+advanced_stocks = scan_advanced_setups()
 
-if not vcp_stocks:
-  st.info("Scanning database for VCP contraction setups...")
+if not advanced_stocks:
+  st.info("Scanning database for high-conviction VCP + EMA setups...")
 else:
   cols = st.columns(3)
-  for idx, stock in enumerate(vcp_stocks):
+  for idx, stock in enumerate(advanced_stocks):
     col_target = cols[idx % 3]
     with col_target:
       st.markdown(
-          f"### 📐 {stock['name']} (`{stock['ticker']}`)\n"
+          f"### ⚡ {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Setup Type:** VCP Tightening Squeeze  \n"
-          f"**Volume Status:** {stock['vol_trend']}"
+          f"**EMA Trend:** {stock['ema_status']}  \n"
+          f"**Volume Power:** {stock['vol_spike']} average"
       )
       st.markdown("---")

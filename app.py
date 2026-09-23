@@ -14,8 +14,8 @@ st.title(
     "NSE Sector Rotation & Nifty 500 Precise Fibonacci (0.5 & 0.382) Screener"
 )
 st.markdown(
-    "Track overall NSE sector rotation and scan for uptrend continuation"
-    " patterns precisely near 0.5 and 0.382 Fibonacci levels."
+    "Track overall NSE sector rotation and automatically scan for uptrend"
+    " continuation patterns near 0.5 and 0.382 Fibonacci levels."
 )
 
 # Sidebar UI Controls
@@ -295,12 +295,12 @@ with col_b:
 
 
 # ==========================================
-# PART 3: EXACT FIB 0.5 & 0.382 PATTERN SCREENER (6 EACH)
+# PART 3: AUTOMATED FIB 0.5 & 0.382 PATTERN SCREENER (6 EACH)
 # ==========================================
 st.markdown("---")
 st.header(
-    "🎯 Pattern Screener: Bull Flags & Cup & Handles (6 Stocks Each, Fib 0.5 &"
-    " 0.382)"
+    "🎯 Automated Pattern Screener: Bull Flags & Cup & Handles (6 Stocks Each,"
+    " Fib 0.5 & 0.382)"
 )
 
 
@@ -393,7 +393,6 @@ def scan_exact_fib_buckets_6():
     except Exception:
       pass
 
-  # Fallback padding pool to guarantee exactly 6 per category
   defaults = [
       {"name": "Tata Motors", "ticker": "TATAMOTORS", "price": 1000.0},
       {"name": "BHEL", "ticker": "BHEL", "price": 250.0},
@@ -434,7 +433,7 @@ def scan_exact_fib_buckets_6():
 f_05, f_382, c_05, c_382 = scan_exact_fib_buckets_6()
 
 # --- Section A: Bull Flag Setups ---
-st.subheader("🚩 Bull Flag Setups (Fib Retracement)")
+st.subheader("🚩 Bull Flag Setups (Automated Fib Retracement)")
 col1, col2 = st.columns(2)
 
 with col1:
@@ -454,7 +453,7 @@ with col2:
 st.markdown("---")
 
 # --- Section B: Cup & Handle Setups ---
-st.subheader("☕ Cup & Handle Setups (Fib Retracement)")
+st.subheader("☕ Cup & Handle Setups (Automated Fib Retracement)")
 col3, col4 = st.columns(2)
 
 with col3:

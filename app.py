@@ -9,114 +9,40 @@ st.set_page_config(
 )
 
 st.title("NSE Sector & Stock Rotation (RRG) Dashboard")
-st.markdown("Relative Rotation Graph tracking sectors and constituent stocks.")
+st.markdown(
+    "Relative Rotation Graph tracking NSE sector rotation and stock-level"
+    " drill-downs."
+)
 
 # Sidebar UI Controls
 st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
-
-view_mode = st.sidebar.selectbox(
-    "Select View Mode",
-    [
-        "All Sectors",
-        "IT Stocks",
-        "Auto Stocks",
-        "Pharma Stocks",
-        "FMCG Stocks",
-        "Metal Stocks",
-        "Bank Stocks",
-    ],
-)
-
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Define Benchmarks and Ticker Dictionaries
-if view_mode == "All Sectors":
-  benchmark = "^NSEI"
-  tickers_dict = {
-      "AUTO": "^CNXAUTO",
-      "BANK": "^NSEBANK",
-      "FIN SERVICE": "^CNXFIN",
-      "FMCG": "^CNXFMCG",
-      "IT": "^CNXIT",
-      "MEDIA": "^CNXMEDIA",
-      "METAL": "^CNXMETAL",
-      "PHARMA": "^CNXPHARMA",
-      "PSU BANK": "^CNXPSUBANK",
-      "REALTY": "^CNXREALTY",
-      "PVT BANK": "^CNXPVTBNK",
-      "HEALTHCARE": "^CNXHEALTH",
-      "CONSR DURBL": "^CNXCONSUM",
-      "OIL & GAS": "^CNXENERGY",
-      "INFRA": "^CNXINFRA",
-      "COMMODITIES": "^CNXCMDT",
-  }
-elif view_mode == "IT Stocks":
-  benchmark = "^CNXIT"
-  tickers_dict = {
-      "TCS": "TCS.NS",
-      "INFY": "INFY.NS",
-      "WIPRO": "WIPRO.NS",
-      "HCLTECH": "HCLTECH.NS",
-      "TECHM": "TECHM.NS",
-      "LTIM": "LTIM.NS",
-      "PERSISTENT": "PERSISTENT.NS",
-  }
-elif view_mode == "Auto Stocks":
-  benchmark = "^CNXAUTO"
-  tickers_dict = {
-      "TATAMOTORS": "TATAMOTORS.NS",
-      "MARUTI": "MARUTI.NS",
-      "M&M": "M&M.NS",
-      "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
-      "HEROMOTOCO": "HEROMOTOCO.NS",
-      "EICHERMOT": "EICHERMOT.NS",
-      "TVSMOTOR": "TVSMOTOR.NS",
-  }
-elif view_mode == "Pharma Stocks":
-  benchmark = "^CNXPHARMA"
-  tickers_dict = {
-      "SUNPHARMA": "SUNPHARMA.NS",
-      "DRREDDY": "DRREDDY.NS",
-      "CIPLA": "CIPLA.NS",
-      "DIVISLAB": "DIVISLAB.NS",
-      "APOLLOHOSP": "APOLLOHOSP.NS",
-      "LUPIN": "LUPIN.NS",
-      "TORNTPHARM": "TORNTPHARM.NS",
-  }
-elif view_mode == "FMCG Stocks":
-  benchmark = "^CNXFMCG"
-  tickers_dict = {
-      "HINDUNILVR": "HINDUNILVR.NS",
-      "ITC": "ITC.NS",
-      "NESTLEIND": "NESTLEIND.NS",
-      "BRITANNIA": "BRITANNIA.NS",
-      "TATACONSUM": "TATACONSUM.NS",
-      "DABUR": "DABUR.NS",
-      "MARICO": "MARICO.NS",
-  }
-elif view_mode == "Metal Stocks":
-  benchmark = "^CNXMETAL"
-  tickers_dict = {
-      "TATASTEEL": "TATASTEEL.NS",
-      "HINDALCO": "HINDALCO.NS",
-      "JSWSTEEL": "JSWSTEEL.NS",
-      "VEDL": "VEDL.NS",
-      "COALINDIA": "COALINDIA.NS",
-      "NMDC": "NMDC.NS",
-      "JSL": "JSL.NS",
-  }
-elif view_mode == "Bank Stocks":
-  benchmark = "^NSEBANK"
-  tickers_dict = {
-      "HDFCBANK": "HDFCBANK.NS",
-      "ICICIBANK": "ICICIBANK.NS",
-      "SBIN": "SBIN.NS",
-      "KOTAKBANK": "KOTAKBANK.NS",
-      "AXISBANK": "AXISBANK.NS",
-      "INDUSINDBK": "INDUSINDBK.NS",
-      "BANKBARODA": "BANKBARODA.NS",
-  }
+# ==========================================
+# PART 1: ALL SECTORS ROTATION
+# ==========================================
+st.header("🌐 All Sectors Rotation View")
+
+all_sectors_benchmark = "^NSEI"
+sectors_dict = {
+    "AUTO": "^CNXAUTO",
+    "BANK": "^NSEBANK",
+    "FIN SERVICE": "^CNXFIN",
+    "FMCG": "^CNXFMCG",
+    "IT": "^CNXIT",
+    "MEDIA": "^CNXMEDIA",
+    "METAL": "^CNXMETAL",
+    "PHARMA": "^CNXPHARMA",
+    "PSU BANK": "^CNXPSUBANK",
+    "REALTY": "^CNXREALTY",
+    "PVT BANK": "^CNXPVTBNK",
+    "HEALTHCARE": "^CNXHEALTH",
+    "CONSR DURBL": "^CNXCONSUM",
+    "OIL & GAS": "^CNXENERGY",
+    "INFRA": "^CNXINFRA",
+    "COMMODITIES": "^CNXCMDT",
+}
 
 
 @st.cache_data(ttl=3600)
@@ -154,22 +80,19 @@ def fetch_data(tf, bench, items):
   return combined_df
 
 
-# Load Data
-data = fetch_data(timeframe, benchmark, tickers_dict)
+# Load All Sectors Data
+data_sectors = fetch_data(timeframe, all_sectors_benchmark, sectors_dict)
 
-if benchmark not in data.columns:
-  st.error(
-      "Benchmark data could not be retrieved. Please check network or symbols."
-  )
+if all_sectors_benchmark not in data_sectors.columns:
+  st.error("Benchmark data could not be retrieved.")
 else:
-  bench_series = data[benchmark]
+  bench_series = data_sectors[all_sectors_benchmark]
+  ratio_df = pd.DataFrame(index=data_sectors.index)
+  mom_df = pd.DataFrame(index=data_sectors.index)
 
-  ratio_df = pd.DataFrame(index=data.index)
-  mom_df = pd.DataFrame(index=data.index)
-
-  for name in tickers_dict.keys():
-    if name in data.columns:
-      sec_series = data[name]
+  for name in sectors_dict.keys():
+    if name in data_sectors.columns:
+      sec_series = data_sectors[name]
       rs = sec_series / bench_series
       sma_rs = rs.rolling(window=14).mean()
       ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
@@ -180,38 +103,34 @@ else:
   ratio_df.dropna(inplace=True)
   mom_df.dropna(inplace=True)
 
-  if ratio_df.empty or mom_df.empty:
-    st.warning("Not enough overlapping data found. Try toggling timeframe.")
-  else:
-    # Build Plotly RRG Chart
-    fig = go.Figure()
-
-    fig.add_hline(y=100, line_dash="dash", line_color="gray")
-    fig.add_vline(x=100, line_dash="dash", line_color="gray")
+  if not ratio_df.empty:
+    fig_sec = go.Figure()
+    fig_sec.add_hline(y=100, line_dash="dash", line_color="gray")
+    fig_sec.add_vline(x=100, line_dash="dash", line_color="gray")
 
     # Watermarks
-    fig.add_annotation(
+    fig_sec.add_annotation(
         x=107,
         y=108,
         text="<b>LEADING</b>",
         showarrow=False,
         font=dict(size=20, color="rgba(40, 167, 69, 0.25)"),
     )
-    fig.add_annotation(
+    fig_sec.add_annotation(
         x=93,
         y=108,
         text="<b>IMPROVING</b>",
         showarrow=False,
         font=dict(size=20, color="rgba(0, 123, 255, 0.25)"),
     )
-    fig.add_annotation(
+    fig_sec.add_annotation(
         x=93,
         y=92,
         text="<b>LAGGING</b>",
         showarrow=False,
         font=dict(size=20, color="rgba(220, 53, 69, 0.25)"),
     )
-    fig.add_annotation(
+    fig_sec.add_annotation(
         x=107,
         y=92,
         text="<b>WEAKENING</b>",
@@ -222,8 +141,7 @@ else:
     for name in ratio_df.columns:
       x_vals = ratio_df[name].tail(tail_length)
       y_vals = mom_df[name].tail(tail_length)
-
-      fig.add_trace(
+      fig_sec.add_trace(
           go.Scatter(
               x=x_vals,
               y=y_vals,
@@ -236,81 +154,254 @@ else:
           )
       )
 
-    fig.update_layout(
-        title=f"{view_mode} Rotation Graph — {timeframe} View",
-        xaxis_title="RS-Ratio (Trend Strength)",
+    fig_sec.update_layout(
+        title=f"All Sectors Rotation Graph — {timeframe} View",
+        xaxis_title="RS-Ratio",
         yaxis_title="RS-Momentum",
         xaxis=dict(range=[90, 110]),
         yaxis=dict(range=[90, 110]),
-        height=700,
+        height=650,
         template="plotly_white",
     )
+    st.plotly_chart(fig_sec, use_container_width=True)
 
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- QUADRANT CARDS BREAKDOWN SECTION ---
-    st.markdown("---")
-    st.subheader(f"📊 {view_mode} Quadrant Summary")
-
-    latest_ratios = ratio_df.iloc[-1]
-    latest_moms = mom_df.iloc[-1]
-
-    leading, weakening, lagging, improving = [], [], [], []
+    # Quadrant Summary Cards for All Sectors
+    st.subheader("📊 All Sectors Quadrant Summary")
+    latest_r = ratio_df.iloc[-1]
+    latest_m = mom_df.iloc[-1]
+    lead, weak, lag, imp = [], [], [], []
 
     for name in ratio_df.columns:
-      r = latest_ratios[name]
-      m = latest_moms[name]
+      r, m = latest_r[name], latest_m[name]
       if r >= 100 and m >= 100:
-        leading.append(name)
+        lead.append(name)
       elif r >= 100 and m < 100:
-        weakening.append(name)
+        weak.append(name)
       elif r < 100 and m < 100:
-        lagging.append(name)
+        lag.append(name)
       else:
-        improving.append(name)
+        imp.append(name)
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
       st.markdown("#### 🟢 Leading")
-      for s in leading:
+      for s in lead:
         st.markdown(f"- **{s}**")
-
-    with col2:
+    with c2:
       st.markdown("#### 🔵 Improving")
-      for s in improving:
+      for s in imp:
         st.markdown(f"- **{s}**")
-
-    with col3:
+    with c3:
       st.markdown("#### 🟡 Weakening")
-      for s in weakening:
+      for s in weak:
         st.markdown(f"- **{s}**")
-
-    with col4:
+    with c4:
       st.markdown("#### 🔴 Lagging")
-      for s in lagging:
+      for s in lag:
         st.markdown(f"- **{s}**")
 
-    # --- SEPARATE PARTITION: DETAILED STOCKS / ITEMS TABLE ---
-    st.markdown("---")
-    st.subheader(f"📋 Detailed Breakdown Table ({view_mode})")
 
-    summary_data = []
-    for name in ratio_df.columns:
-      r = latest_ratios[name]
-      m = latest_moms[name]
-      if r >= 100 and m >= 100:
-        quad = "Leading"
-      elif r >= 100 and m < 100:
-        quad = "Weakening"
-      elif r < 100 and m < 100:
-        quad = "Lagging"
-      else:
-        quad = "Improving"
+# ==========================================
+# PART 2: STOCK-LEVEL DRILL-DOWN (NEW PARTITION)
+# ==========================================
+st.markdown("---")
+st.header("🔍 Stock-Level Rotation (Drill-Down)")
 
-      summary_data.append(
-          {"Name": name, "RS-Ratio (X)": round(r, 2), "RS-Momentum (Y)": round(m, 2), "Quadrant": quad}
+# Sector mapping database with stock tickers and their respective index benchmark
+stock_sector_db = {
+    "IT": {
+        "benchmark": "^CNXIT",
+        "stocks": {
+            "TCS": "TCS.NS",
+            "INFY": "INFY.NS",
+            "WIPRO": "WIPRO.NS",
+            "HCLTECH": "HCLTECH.NS",
+            "TECHM": "TECHM.NS",
+            "LTIM": "LTIM.NS",
+        },
+    },
+    "AUTO": {
+        "benchmark": "^CNXAUTO",
+        "stocks": {
+            "TATAMOTORS": "TATAMOTORS.NS",
+            "MARUTI": "MARUTI.NS",
+            "M&M": "M&M.NS",
+            "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
+            "HEROMOTOCO": "HEROMOTOCO.NS",
+        },
+    },
+    "PHARMA": {
+        "benchmark": "^CNXPHARMA",
+        "stocks": {
+            "SUNPHARMA": "SUNPHARMA.NS",
+            "DRREDDY": "DRREDDY.NS",
+            "CIPLA": "CIPLA.NS",
+            "DIVISLAB": "DIVISLAB.NS",
+            "APOLLOHOSP": "APOLLOHOSP.NS",
+        },
+    },
+    "FMCG": {
+        "benchmark": "^CNXFMCG",
+        "stocks": {
+            "HINDUNILVR": "HINDUNILVR.NS",
+            "ITC": "ITC.NS",
+            "NESTLEIND": "NESTLEIND.NS",
+            "BRITANNIA": "BRITANNIA.NS",
+            "TATACONSUM": "TATACONSUM.NS",
+        },
+    },
+    "METAL": {
+        "benchmark": "^CNXMETAL",
+        "stocks": {
+            "TATASTEEL": "TATASTEEL.NS",
+            "HINDALCO": "HINDALCO.NS",
+            "JSWSTEEL": "JSWSTEEL.NS",
+            "VEDL": "VEDL.NS",
+            "COALINDIA": "COALINDIA.NS",
+        },
+    },
+    "BANK": {
+        "benchmark": "^NSEBANK",
+        "stocks": {
+            "HDFCBANK": "HDFCBANK.NS",
+            "ICICIBANK": "ICICIBANK.NS",
+            "SBIN": "SBIN.NS",
+            "KOTAKBANK": "KOTAKBANK.NS",
+            "AXISBANK": "AXISBANK.NS",
+        },
+    },
+}
+
+selected_sector = st.selectbox(
+    "Select Sector to View Constituent Stocks", list(stock_sector_db.keys())
+)
+
+sec_info = stock_sector_db[selected_sector]
+stock_bench = sec_info["benchmark"]
+stocks_dict = sec_info["stocks"]
+
+# Fetch stock data against sector index
+data_stocks = fetch_data(timeframe, stock_bench, stocks_dict)
+
+if stock_bench not in data_stocks.columns:
+  st.warning(
+      f"Could not load benchmark index for {selected_sector}. Try another"
+      " sector."
+  )
+else:
+  s_bench_series = data_stocks[stock_bench]
+  s_ratio_df = pd.DataFrame(index=data_stocks.index)
+  s_mom_df = pd.DataFrame(index=data_stocks.index)
+
+  for s_name in stocks_dict.keys():
+    if s_name in data_stocks.columns:
+      st_series = data_stocks[s_name]
+      rs = st_series / s_bench_series
+      sma_rs = rs.rolling(window=14).mean()
+      ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
+      momentum = 100 + ratio.diff(1)
+      s_ratio_df[s_name] = ratio
+      s_mom_df[s_name] = momentum
+
+  s_ratio_df.dropna(inplace=True)
+  s_mom_df.dropna(inplace=True)
+
+  if not s_ratio_df.empty:
+    fig_stk = go.Figure()
+    fig_stk.add_hline(y=100, line_dash="dash", line_color="gray")
+    fig_stk.add_vline(x=100, line_dash="dash", line_color="gray")
+
+    # Watermarks for stocks partition
+    fig_stk.add_annotation(
+        x=107,
+        y=108,
+        text="<b>LEADING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(40, 167, 69, 0.25)"),
+    )
+    fig_stk.add_annotation(
+        x=93,
+        y=108,
+        text="<b>IMPROVING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(0, 123, 255, 0.25)"),
+    )
+    fig_stk.add_annotation(
+        x=93,
+        y=92,
+        text="<b>LAGGING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(220, 53, 69, 0.25)"),
+    )
+    fig_stk.add_annotation(
+        x=107,
+        y=92,
+        text="<b>WEAKENING</b>",
+        showarrow=False,
+        font=dict(size=20, color="rgba(255, 193, 7, 0.35)"),
+    )
+
+    for s_name in s_ratio_df.columns:
+      x_vals = s_ratio_df[s_name].tail(tail_length)
+      y_vals = s_mom_df[s_name].tail(tail_length)
+      fig_stk.add_trace(
+          go.Scatter(
+              x=x_vals,
+              y=y_vals,
+              mode="lines+markers+text",
+              name=s_name,
+              text=[""] * (len(x_vals) - 1) + [s_name],
+              textposition="top center",
+              line=dict(width=2),
+              marker=dict(size=[6] * (len(x_vals) - 1) + [12]),
+          )
       )
 
-    summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df, use_container_width=True)
+    fig_stk.update_layout(
+        title=(
+            f"{selected_sector} Stocks Rotation Graph — {timeframe} View"
+            f" (Benchmark: {stock_bench})"
+        ),
+        xaxis_title="RS-Ratio",
+        yaxis_title="RS-Momentum",
+        xaxis=dict(range=[90, 110]),
+        yaxis=dict(range=[90, 110]),
+        height=650,
+        template="plotly_white",
+    )
+    st.plotly_chart(fig_stk, use_container_width=True)
+
+    # Quadrant Summary for Stocks of Selected Sector
+    st.subheader(f"📊 {selected_sector} Stocks Quadrant Summary")
+    st_latest_r = s_ratio_df.iloc[-1]
+    st_latest_m = s_mom_df.iloc[-1]
+    s_lead, s_weak, s_lag, s_imp = [], [], [], []
+
+    for s_name in s_ratio_df.columns:
+      r, m = st_latest_r[s_name], st_latest_m[s_name]
+      if r >= 100 and m >= 100:
+        s_lead.append(s_name)
+      elif r >= 100 and m < 100:
+        s_weak.append(s_name)
+      elif r < 100 and m < 100:
+        s_lag.append(s_name)
+      else:
+        s_imp.append(s_name)
+
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    with sc1:
+      st.markdown("#### 🟢 Leading")
+      for s in s_lead:
+        st.markdown(f"- **{s}**")
+    with sc2:
+      st.markdown("#### 🔵 Improving")
+      for s in s_imp:
+        st.markdown(f"- **{s}**")
+    with sc3:
+      st.markdown("#### 🟡 Weakening")
+      for s in s_weak:
+        st.markdown(f"- **{s}**")
+    with sc4:
+      st.markdown("#### 🔴 Lagging")
+      for s in s_lag:
+        st.markdown(f"- **{s}**")

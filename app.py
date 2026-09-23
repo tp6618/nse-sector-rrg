@@ -5,81 +5,125 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="Stock-Level Rotation RRG", page_icon="📈", layout="wide"
+    page_title="NSE Sector & Stock Rotation RRG", page_icon="📈", layout="wide"
 )
 
-st.title("Stock-Level Rotation (RRG) Dashboard")
+st.title("NSE Sector & Stock Rotation (RRG) Dashboard")
 st.markdown(
-    "Track individual stock momentum and relative strength inside specific NSE"
-    " sectors against Nifty 50."
+    "Relative Rotation Graph tracking sectors and constituent stocks."
 )
 
 # Sidebar UI Controls
 st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
+
+# View Mode Dropdown (All Sectors or Individual Sector Stocks)
+view_mode = st.sidebar.selectbox(
+    "Select View Mode",
+    [
+        "All Sectors",
+        "IT Stocks",
+        "Auto Stocks",
+        "Pharma Stocks",
+        "FMCG Stocks",
+        "Metal Stocks",
+        "Bank Stocks",
+    ],
+)
+
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Benchmark
-benchmark = "^NSEI"
-
-# Dictionary mapping sectors to their major constituent stocks (NSE symbols)
-sector_stocks = {
-    "IT": {
-        "TCS": "TCS.NS",
-        "INFY": "INFY.NS",
-        "HCLTECH": "HCLTECH.NS",
-        "WIPRO": "WIPRO.NS",
-        "TECHM": "TECHM.NS",
-        "LTIM": "LTIM.NS",
-    },
-    "BANK": {
-        "HDFCBANK": "HDFCBANK.NS",
-        "ICICIBANK": "ICICIBANK.NS",
-        "SBIN": "SBIN.NS",
-        "KOTAKBANK": "KOTAKBANK.NS",
-        "AXISBANK": "AXISBANK.NS",
-        "INDUSINDBK": "INDUSINDBK.NS",
-    },
-    "AUTO": {
-        "TATAMOTORS": "TATAMOTORS.NS",
-        "MARUTI": "MARUTI.NS",
-        "M&M": "M-M.NS",
-        "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
-        "HEROMOTOCO": "HEROMOTOCO.NS",
-        "EICHERMOT": "EICHERMOT.NS",
-    },
-    "PHARMA": {
-        "SUNPHARMA": "SUNPHARMA.NS",
-        "DRREDDY": "DRREDDY.NS",
-        "CIPLA": "CIPLA.NS",
-        "DIVISLAB": "DIVISLAB.NS",
-        "APOLLOHOSP": "APOLLOHOSP.NS",
-        "LUPIN": "LUPIN.NS",
-    },
-    "METAL": {
-        "TATASTEEL": "TATASTEEL.NS",
-        "HINDALCO": "HINDALCO.NS",
-        "JSWSTEEL": "JSWSTEEL.NS",
-        "VEDL": "VEDL.NS",
-        "COALINDIA": "COALINDIA.NS",
-    },
-    "ENERGY": {
-        "RELIANCE": "RELIANCE.NS",
-        "ONGC": "ONGC.NS",
-        "BPCL": "BPCL.NS",
-        "NTPC": "NTPC.NS",
-        "POWERGRID": "POWERGRID.NS",
-    },
-}
-
-selected_sector = st.sidebar.selectbox(
-    "Select Sector to Analyze", list(sector_stocks.keys())
-)
-current_stocks = sector_stocks[selected_sector]
+# Define Benchmarks and Ticker Dictionaries based on selection
+if view_mode == "All Sectors":
+  benchmark = "^NSEI"  # Nifty 50
+  tickers_dict = {
+      "AUTO": "^CNXAUTO",
+      "BANK": "^NSEBANK",
+      "FIN SERVICE": "^CNXFIN",
+      "FMCG": "^CNXFMCG",
+      "IT": "^CNXIT",
+      "MEDIA": "^CNXMEDIA",
+      "METAL": "^CNXMETAL",
+      "PHARMA": "^CNXPHARMA",
+      "PSU BANK": "^CNXPSUBANK",
+      "REALTY": "^CNXREALTY",
+      "PVT BANK": "^CNXPVTBNK",
+      "HEALTHCARE": "^CNXHEALTH",
+      "CONSR DURBL": "^CNXCONSUM",
+      "OIL & GAS": "^CNXENERGY",
+      "INFRA": "^CNXINFRA",
+      "COMMODITIES": "^CNXCMDT",
+  }
+elif view_mode == "IT Stocks":
+  benchmark = "^CNXIT"
+  tickers_dict = {
+      "TCS": "TCS.NS",
+      "INFY": "INFY.NS",
+      "WIPRO": "WIPRO.NS",
+      "HCLTECH": "HCLTECH.NS",
+      "TECHM": "TECHM.NS",
+      "LTIM": "LTIM.NS",
+      "PERSISTENT": "PERSISTENT.NS",
+  }
+elif view_mode == "Auto Stocks":
+  benchmark = "^CNXAUTO"
+  tickers_dict = {
+      "TATAMOTORS": "TATAMOTORS.NS",
+      "MARUTI": "MARUTI.NS",
+      "M&M": "M&M.NS",
+      "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
+      "HEROMOTOCO": "HEROMOTOCO.NS",
+      "EICHERMOT": "EICHERMOT.NS",
+      "TVSMOTOR": "TVSMOTOR.NS",
+  }
+elif view_mode == "Pharma Stocks":
+  benchmark = "^CNXPHARMA"
+  tickers_dict = {
+      "SUNPHARMA": "SUNPHARMA.NS",
+      "DRREDDY": "DRREDDY.NS",
+      "CIPLA": "CIPLA.NS",
+      "DIVISLAB": "DIVISLAB.NS",
+      "APOLLOHOSP": "APOLLOHOSP.NS",
+      "LUPIN": "LUPIN.NS",
+      "TORNTPHARM": "TORNTPHARM.NS",
+  }
+elif view_mode == "FMCG Stocks":
+  benchmark = "^CNXFMCG"
+  tickers_dict = {
+      "HINDUNILVR": "HINDUNILVR.NS",
+      "ITC": "ITC.NS",
+      "NESTLEIND": "NESTLEIND.NS",
+      "BRITANNIA": "BRITANNIA.NS",
+      "TATACONSUM": "TATACONSUM.NS",
+      "DABUR": "DABUR.NS",
+      "MARICO": "MARICO.NS",
+  }
+elif view_mode == "Metal Stocks":
+  benchmark = "^CNXMETAL"
+  tickers_dict = {
+      "TATASTEEL": "TATASTEEL.NS",
+      "HINDALCO": "HINDALCO.NS",
+      "JSWSTEEL": "JSWSTEEL.NS",
+      "VEDL": "VEDL.NS",
+      "COALINDIA": "COALINDIA.NS",
+      "NMDC": "NMDC.NS",
+      "JSL": "JSL.NS",
+  }
+elif view_mode == "Bank Stocks":
+  benchmark = "^NSEBANK"
+  tickers_dict = {
+      "HDFCBANK": "HDFCBANK.NS",
+      "ICICIBANK": "ICICIBANK.NS",
+      "SBIN": "SBIN.NS",
+      "KOTAKBANK": "KOTAKBANK.NS",
+      "AXISBANK": "AXISBANK.NS",
+      "INDUSINDBK": "INDUSINDBK.NS",
+      "BANKBARODA": "BANKBARODA.NS",
+  }
 
 
 @st.cache_data(ttl=3600)
-def fetch_stock_data(tf, stocks_dict):
+def fetch_data(tf, bench, items):
   period = "1y" if tf == "Daily" else "2y"
   interval = "1d" if tf == "Daily" else "1wk"
 
@@ -87,19 +131,17 @@ def fetch_stock_data(tf, stocks_dict):
 
   # Download benchmark
   try:
-    b_df = yf.download(
-        benchmark, period=period, interval=interval, progress=False
-    )
+    b_df = yf.download(bench, period=period, interval=interval, progress=False)
     if not b_df.empty:
       if isinstance(b_df.columns, pd.MultiIndex):
-        data_dict[benchmark] = b_df[("Close", benchmark)].squeeze()
+        data_dict[bench] = b_df[("Close", bench)].squeeze()
       else:
-        data_dict[benchmark] = b_df["Close"].squeeze()
+        data_dict[bench] = b_df["Close"].squeeze()
   except Exception:
     pass
 
-  # Download each stock individually
-  for name, ticker in stocks_dict.items():
+  # Download each component individually
+  for name, ticker in items.items():
     try:
       df = yf.download(
           ticker, period=period, interval=interval, progress=False
@@ -119,12 +161,11 @@ def fetch_stock_data(tf, stocks_dict):
 
 
 # Load Data
-data = fetch_stock_data(timeframe, current_stocks)
+data = fetch_data(timeframe, benchmark, tickers_dict)
 
 if benchmark not in data.columns:
   st.error(
-      "Benchmark data could not be retrieved. Please check your network or"
-      " ticker symbols."
+      "Benchmark data could not be retrieved. Please check network or symbols."
   )
 else:
   bench_series = data[benchmark]
@@ -132,7 +173,7 @@ else:
   ratio_df = pd.DataFrame(index=data.index)
   mom_df = pd.DataFrame(index=data.index)
 
-  for name in current_stocks.keys():
+  for name in tickers_dict.keys():
     if name in data.columns:
       sec_series = data[name]
       rs = sec_series / bench_series
@@ -154,7 +195,7 @@ else:
     fig.add_hline(y=100, line_dash="dash", line_color="gray")
     fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
-    # Background Watermark Labels
+    # Watermarks
     fig.add_annotation(
         x=107,
         y=108,
@@ -202,7 +243,7 @@ else:
       )
 
     fig.update_layout(
-        title=f"{selected_sector} Stocks Rotation Graph — {timeframe} View",
+        title=f"{view_mode} Rotation Graph — {timeframe} View",
         xaxis_title="RS-Ratio (Trend Strength)",
         yaxis_title="RS-Momentum",
         xaxis=dict(range=[90, 110]),
@@ -215,7 +256,7 @@ else:
 
     # --- QUADRANT CARDS BREAKDOWN SECTION ---
     st.markdown("---")
-    st.subheader(f"📊 {selected_sector} Stocks Quadrant Summary")
+    st.subheader(f"📊 {view_mode} Quadrant Summary")
 
     latest_ratios = ratio_df.iloc[-1]
     latest_moms = mom_df.iloc[-1]

@@ -16,8 +16,7 @@ st.set_page_config(
 st.title("NSE Sector Rotation & Live Auto-Updating Nifty 500 Screener")
 st.markdown(
     "Automatically fetches live Nifty 500 components from NSE India and scans"
-    " across 5 custom screeners with 52-week high, ADTV liquidity, and"
-    " Relative Strength filters."
+    " across custom multi-screener strategies with custom pullback ranges."
 )
 
 # Sidebar UI Controls
@@ -25,7 +24,6 @@ st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Manual Refresh Button to clear cache and force live update
 if st.sidebar.button("🔄 Refresh Live Market Data"):
   st.cache_data.clear()
   st.success("Cache cleared! Fetching fresh live market data...")
@@ -58,7 +56,7 @@ sectors_dict = {
 }
 
 
-@st.cache_data(ttl=300)  # Shorter TTL (5 minutes) for fresher automatic updates
+@st.cache_data(ttl=300)
 def fetch_data(tf, bench, items):
   period = "1y" if tf == "Daily" else "2y"
   interval = "1d" if tf == "Daily" else "1wk"
@@ -93,7 +91,6 @@ def fetch_data(tf, bench, items):
   return combined_df
 
 
-# Load All Sectors Data
 data_sectors = fetch_data(timeframe, all_sectors_benchmark, sectors_dict)
 
 if all_sectors_benchmark not in data_sectors.columns:
@@ -121,7 +118,6 @@ else:
     fig_sec.add_hline(y=100, line_dash="dash", line_color="gray")
     fig_sec.add_vline(x=100, line_dash="dash", line_color="gray")
 
-    # Watermarks
     fig_sec.add_annotation(
         x=107,
         y=108,
@@ -178,7 +174,6 @@ else:
     )
     st.plotly_chart(fig_sec, use_container_width=True)
 
-    # Quadrant Summary Cards for All Sectors
     st.subheader("📊 All Sectors Quadrant Summary")
     latest_r = ratio_df.iloc[-1]
     latest_m = mom_df.iloc[-1]
@@ -304,18 +299,20 @@ with col_b:
 
 
 # ==========================================
-# PART 3: AUTO-UPDATING LIVE NIFTY 500 MULTI-SCREENER
+# PART 3: AUTO-UPDATING LIVE NIFTY 500 MULTI-SCREENER (10-13% FROM HIGHS)
 # ==========================================
 st.markdown("---")
-st.header("🔍 Auto-Updating Live Nifty 500 Multi-Screener Engine")
+st.header(
+    "🔍 Auto-Updating Live Nifty 500 Engine (10% - 13% from 52W/Swing High)"
+)
 st.markdown(
-    "Automatically fetching live components from NSE India, scanning near"
-    " 52-week highs, verifying ADTV liquidity, relative strength, volume"
-    " dry-ups, and 5 custom screeners."
+    "Scanning live Nifty 500 components where LTP is strictly **10% to 13%**"
+    " below their 52-week or swing high, combined with ADTV liquidity and 5"
+    " custom screeners."
 )
 
 
-@st.cache_data(ttl=300)  # TTL reduced to 5 mins for automated recaching
+@st.cache_data(ttl=300)
 def get_nifty500_tickers():
   url = "https://archives.nseindia.com/content/indices/ind_nifty500list.csv"
   headers = {
@@ -356,8 +353,8 @@ def get_nifty500_tickers():
   ]
 
 
-@st.cache_data(ttl=300)  # Results refresh automatically every 5 minutes
-def run_auto_screeners():
+@st.cache_data(ttl=300)
+def run_auto_screeners_10_13():
   tickers = get_nifty500_tickers()
   results = []
 
@@ -399,7 +396,9 @@ def run_auto_screeners():
 
         high_52w = high.max()
         pct_below_high = (high_52w - curr_close) / high_52w
-        if pct_below_high > 0.10:
+
+        # Strict 10% to 13% Pullback Filter from High
+        if not (0.10 <= pct_below_high <= 0.13):
           continue
 
         adtv = (close * vol).tail(20).mean()
@@ -436,15 +435,13 @@ def run_auto_screeners():
             and curr_close > prev_close
         )
         s2 = (
-            curr_close >= high_52w * 0.95
-            and curr_close <= high_52w * 1.02
-            and 55 <= curr_rsi <= 80
+            curr_close >= high_52w * 0.85
+            and curr_close <= high_52w * 0.92
+            and 50 <= curr_rsi <= 80
         )
         ema_bunched = (
-            abs((curr_close - ema_5) / ema_5) * 100 <= 1
-            and abs((curr_close - ema_13) / ema_13) * 100 <= 1
-            and abs((curr_close - ema_21) / ema_21) * 100 <= 1
-            and abs((curr_close - ema_26) / ema_26) * 100 <= 1
+            abs((curr_close - ema_5) / ema_5) * 100 <= 1.5
+            and abs((curr_close - ema_21) / ema_21) * 100 <= 1.5
         )
         s3 = curr_vol > 100000 and curr_vol > sma_vol_30 and ema_bunched
         pole_move = (
@@ -452,11 +449,11 @@ def run_auto_screeners():
             if len(close) >= 20
             else 0
         )
-        s4 = curr_vol > 500000 and curr_close > 100 and pole_move > 0.04
+        s4 = curr_vol > 300000 and curr_close > 100 and pole_move > 0.02
         s5 = (
             curr_close > ema_20
-            and curr_rsi >= 58
-            and curr_vol >= (vol_sma_20.iloc[-1] * 1.2)
+            and curr_rsi >= 50
+            and curr_vol >= (vol_sma_20.iloc[-1] * 1.1)
             and (curr_close * curr_vol) >= 5000000
         )
 
@@ -472,13 +469,14 @@ def run_auto_screeners():
               passed_count * 20
               + (stock_return_60d * 10)
               + (vol_multiple * 5)
-              + ((1 - pct_below_high) * 15)
+              + (pct_below_high * 100)
           )
 
           results.append({
               "ticker": ticker.split(".")[0],
               "price": curr_close,
               "high_52w": high_52w,
+              "pullback": f"{pct_below_high*100:.1f}%",
               "matches": passed_count,
               "details": f"Passed {passed_count}/5 Screeners",
               "score": composite_score,
@@ -491,25 +489,25 @@ def run_auto_screeners():
   return results
 
 
-consensus_stocks = run_auto_screeners()
+consensus_stocks_10_13 = run_auto_screeners_10_13()
 
-if not consensus_stocks:
+if not consensus_stocks_10_13:
   st.info(
-      "Scanning live Nifty 500 universe... No stocks currently match the"
-      " intersection."
+      "Scanning live Nifty 500 universe for 10%–13% pullbacks... No stocks"
+      " currently match the intersection."
   )
 else:
   st.success(
-      f"Found {len(consensus_stocks)} high-conviction auto-updated consensus"
-      " stocks!"
+      f"Found {len(consensus_stocks_10_13)} auto-updated consensus stocks"
+      " pulling back 10%–13% from highs!"
   )
   cols = st.columns(3)
-  for idx, stock in enumerate(consensus_stocks[:9]):
+  for idx, stock in enumerate(consensus_stocks_10_13[:9]):
     with cols[idx % 3]:
       st.markdown(
           f"### ⭐ `{stock['ticker']}`\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**52W High:** ₹{stock['high_52w']:,.2f}  \n"
+          f"**Pullback from High:** {stock['pullback']}  \n"
           f"**Status:** {stock['details']}"
       )
       st.markdown("---")

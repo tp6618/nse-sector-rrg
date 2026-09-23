@@ -5,15 +5,15 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & Active Stocks",
+    page_title="NSE Sector Rotation & Breakout Screener",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("NSE Sector Rotation & Nifty 500 Active Stocks Dashboard")
+st.title("NSE Sector Rotation & Nifty 500 Breakout Dashboard")
 st.markdown(
-    "Track overall NSE sector rotation, view constituent directories, and"
-    " monitor active Nifty 500 stock movements."
+    "Track overall NSE sector rotation, constituent directories, and live"
+    " Nifty 500 momentum breakouts."
 )
 
 # Sidebar UI Controls
@@ -293,67 +293,87 @@ with col_b:
 
 
 # ==========================================
-# PART 3: NEWS STOCKS (NIFTY 500 ACTIVE MOVERS)
+# PART 3: NIFTY 500 BREAKOUT & MOMENTUM SCREENER
 # ==========================================
 st.markdown("---")
-st.header("🔥 NEWS Stocks (Active Nifty 500 Market Movers)")
+st.header("🚀 Nifty 500 Breakout & Volume Shocker Screener")
 st.markdown(
-    "List of prominent Nifty 500 stocks currently experiencing high trading"
-    " activity, price momentum, or corporate developments."
+    "Live momentum scan highlighting Nifty 500 stocks showing high relative"
+    " strength, volume expansion, and breakout patterns."
 )
 
 
 @st.cache_data(ttl=600)
-def fetch_active_movers():
-  # Representative sample of high-activity Nifty 500 stocks reacting to news/market events
-  sample_stocks = {
-      "Ola Electric": "OLAELECTRIC.NS",
-      "Elecon Engineering": "ELECON.NS",
-      "Bikaji Foods": "BIKAJI.NS",
-      "Wockhardt": "WOCKPHARMA.NS",
-      "Aditya Infotech": "ADITYA.NS",
-      "Whirlpool India": "WHIRLPOOL.NS",
-      "IDFC First Bank": "IDFCFIRSTB.NS",
-      "Skipper Ltd": "SKIPPER.NS",
-      "M&M Financial": "M&MFIN.NS",
+def scan_breakout_stocks():
+  # Curated list of prominent Nifty 500 liquid stocks for momentum scan
+  screening_pool = {
+      "Apar Industries": "APARINDS.NS",
+      "BEML": "BEML.NS",
+      "Aegis Vopak": "AEGISVOPAK.NS",
+      "Deepak Fertilisers": "DEEPAKFERT.NS",
+      "Jubilant Food": "JUBLFOOD.NS",
+      "HDFC Life": "HDFCLIFE.NS",
+      "Tata Motors": "TATAMOTORS.NS",
+      "Sun Pharma": "SUNPHARMA.NS",
       "Tata Steel": "TATASTEEL.NS",
       "Hindalco": "HINDALCO.NS",
-      "JSW Steel": "JSWSTEEL.NS",
+      "Divi's Lab": "DIVISLAB.NS",
+      "BHEL": "BHEL.NS",
   }
 
-  movers_data = []
-  for name, ticker in sample_stocks.items():
+  breakout_results = []
+  for name, ticker in screening_pool.items():
     try:
-      t = yf.Ticker(ticker)
-      hist = t.history(period="2d")
-      if len(hist) >= 2:
-        close = hist["Close"].iloc[-1]
-        prev = hist["Close"].iloc[-2]
-        chg = ((close - prev) / prev) * 100
-        movers_data.append(
-            {"name": name, "price": close, "change": chg, "ticker": ticker}
-        )
+      df = yf.download(ticker, period="1mo", interval="1d", progress=False)
+      if not df.empty and len(df) >= 10:
+        if isinstance(df.columns, pd.MultiIndex):
+          close_s = df[("Close", ticker)]
+          vol_s = df[("Volume", ticker)]
+        else:
+          close_s = df["Close"]
+          vol_s = df["Volume"]
+
+        curr_close = close_s.iloc[-1]
+        prev_close = close_s.iloc[-2]
+        pct_change = ((curr_close - prev_close) / prev_close) * 100
+
+        avg_vol = vol_s.tail(10).mean()
+        latest_vol = vol_s.iloc[-1]
+        vol_spike = (
+            latest_vol / avg_vol if avg_vol > 0 else 1.0
+        )  # Volume multiple
+
+        # Filter criteria for potential momentum/breakout candidates
+        if pct_change > 0.5 and vol_spike > 1.2:
+          breakout_results.append({
+              "name": name,
+              "ticker": ticker.split(".")[0],
+              "price": curr_close,
+              "change": pct_change,
+              "vol_spike": vol_spike,
+          })
     except Exception:
       pass
-  return movers_data
+
+  return breakout_results
 
 
-active_stocks = fetch_active_movers()
+breakout_stocks = scan_breakout_stocks()
 
-if not active_stocks:
-  st.info("Currently loading stock movers feed...")
+if not breakout_stocks:
+  st.info(
+      "Scanning Nifty 500 momentum watchlists... Check back during active"
+      " market hours."
+  )
 else:
-  # Display in clean columns or cards
-  col_1, col_2, col_3 = st.columns(3)
-  for idx, stock in enumerate(active_stocks):
-    col_target = [col_1, col_2, col_3][idx % 3]
+  cols = st.columns(3)
+  for idx, stock in enumerate(breakout_stocks):
+    col_target = cols[idx % 3]
     with col_target:
-      color_emoji = "🟢" if stock["change"] >= 0 else "🔴"
       st.markdown(
-          f"### {color_emoji} {stock['name']}"
-          f" (`{stock['ticker'].split('.')[0]}`)\n"
+          f"### 🟢 {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Change:** :{ 'green' if stock['change'] >= 0 else 'red' }"
-          f"[{stock['change']:+.2f}%]"
+          f"**Gain:** :green[{stock['change']:+.2f}%]  \n"
+          f"**Volume Spike:** {stock['vol_spike']:.1f}x average"
       )
       st.markdown("---")

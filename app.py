@@ -1,4 +1,5 @@
 import io
+import time
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -23,6 +24,13 @@ st.markdown(
 st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
+
+# Manual Refresh Button to clear cache and force live update
+if st.sidebar.button("🔄 Refresh Live Market Data"):
+  st.cache_data.clear()
+  st.success("Cache cleared! Fetching fresh live market data...")
+  time.sleep(1)
+  st.rerun()
 
 # ==========================================
 # PART 1: ALL SECTORS ROTATION CHART & SUMMARY
@@ -50,7 +58,7 @@ sectors_dict = {
 }
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)  # Shorter TTL (5 minutes) for fresher automatic updates
 def fetch_data(tf, bench, items):
   period = "1y" if tf == "Daily" else "2y"
   interval = "1d" if tf == "Daily" else "1wk"
@@ -307,7 +315,7 @@ st.markdown(
 )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)  # TTL reduced to 5 mins for automated recaching
 def get_nifty500_tickers():
   url = "https://archives.nseindia.com/content/indices/ind_nifty500list.csv"
   headers = {
@@ -348,7 +356,7 @@ def get_nifty500_tickers():
   ]
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)  # Results refresh automatically every 5 minutes
 def run_auto_screeners():
   tickers = get_nifty500_tickers()
   results = []

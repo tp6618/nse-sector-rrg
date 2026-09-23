@@ -5,17 +5,17 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Uptrend & Fibonacci Pattern Screener",
+    page_title="NSE Multi-Screener Pattern Engine",
     page_icon="📈",
     layout="wide",
 )
 
 st.title(
-    "NSE Sector Rotation & Nifty 500 Precise Fibonacci (0.5 & 0.382) Screener"
+    "NSE Sector Rotation & Nifty 500 Multi-Screener Intersection Dashboard"
 )
 st.markdown(
-    "Track overall NSE sector rotation and automatically scan for uptrend"
-    " continuation patterns near 0.5 and 0.382 Fibonacci levels."
+    "Scanning stocks independently across 4 custom screeners and filtering for"
+    " consensus matches."
 )
 
 # Sidebar UI Controls
@@ -295,18 +295,20 @@ with col_b:
 
 
 # ==========================================
-# PART 3: AUTOMATED FIB 0.5 & 0.382 PATTERN SCREENER (6 EACH)
+# PART 3: 4-SCREENER INTERSECTION ENGINE
 # ==========================================
 st.markdown("---")
-st.header(
-    "🎯 Automated Pattern Screener: Bull Flags & Cup & Handles (6 Stocks Each,"
-    " Fib 0.5 & 0.382)"
+st.header("🔍 Multi-Screener Intersection Engine (Scanned across 4 Rules)")
+st.markdown(
+    "Evaluating stocks independently across Screener 1 (MACD/Volume), Screener"
+    " 2 (Price near 52w High & RSI), Screener 3 (EMA Convergence), and Screener"
+    " 4 (Flag Pattern & Volume), and listing consensus matches."
 )
 
 
 @st.cache_data(ttl=600)
-def scan_exact_fib_buckets_6():
-  screening_pool = {
+def run_multi_screeners():
+  universe = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
       "Aegis Vopak": "AEGISVOPAK.NS",
@@ -341,131 +343,106 @@ def scan_exact_fib_buckets_6():
       "Wipro": "WIPRO.NS",
   }
 
-  f_05, f_382, c_05, c_382 = [], [], [], []
-  seen_tickers = set()
+  results = []
 
-  for name, ticker in screening_pool.items():
+  for name, ticker in universe.items():
     try:
       df = yf.download(ticker, period="6mo", interval="1d", progress=False)
-      if not df.empty and len(df) >= 60:
+      if not df.empty and len(df) >= 50:
         if isinstance(df.columns, pd.MultiIndex):
-          close_s = df[("Close", ticker)]
+          close = df[("Close", ticker)]
+          vol = df[("Volume", ticker)]
+          high = df[("High", ticker)]
         else:
-          close_s = df["Close"]
+          close = df["Close"]
+          vol = df["Volume"]
+          high = df["High"]
 
-        curr_price = close_s.iloc[-1]
-        sma_50 = close_s.rolling(50).mean().iloc[-1]
+        curr_close = close.iloc[-1]
+        prev_close = close.iloc[-2]
+        curr_vol = vol.iloc[-1]
+        prev_vol = vol.iloc[-2]
 
-        if curr_price > sma_50 and ticker not in seen_tickers:
-          swing_high = close_s.tail(60).max()
-          swing_low = close_s.tail(60).min()
+        # RSI 14 calculation helper
+        delta = close.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        curr_rsi = rsi.iloc[-1]
 
-          fib_05 = swing_high - (0.5 * (swing_high - swing_low))
-          fib_382 = swing_high - (0.382 * (swing_high - swing_low))
+        # EMAs
+        ema_5 = close.ewm(span=5).mean().iloc[-1]
+        ema_13 = close.ewm(span=13).mean().iloc[-1]
+        ema_21 = close.ewm(span=21).mean().iloc[-1]
+        ema_26 = close.ewm(span=26).mean().iloc[-1]
+        sma_vol_30 = vol.tail(30).mean()
 
-          dist_05 = abs(curr_price - fib_05) / fib_05
-          dist_382 = abs(curr_price - fib_382) / fib_382
+        # --- Screener 1 Check: Volume expansion, close > 2 weeks ago, vol > 100k ---
+        s1 = (
+            curr_vol > prev_vol
+            and curr_close > close.iloc[-14]
+            and curr_vol > 100000
+            and curr_close > prev_close
+        )
 
-          short_pole = (
-              close_s.iloc[-1] - close_s.iloc[-15]
-          ) / close_s.iloc[-15]
+        # --- Screener 2 Check: Near 52w/max high & RSI 55-80 ---
+        max_high = high.tail(120).max()
+        s2 = (
+            curr_close >= max_high * 0.95
+            and curr_close <= max_high * 1.02
+            and 55 <= curr_rsi <= 80
+        )
 
-          entry = {
+        # --- Screener 3 Check: Vol > 100k, Vol > SMA(Vol,30), EMAs tightly bunched within 1% ---
+        ema_bunched = (
+            abs((curr_close - ema_5) / ema_5) * 100 <= 1
+            and abs((curr_close - ema_13) / ema_13) * 100 <= 1
+            and abs((curr_close - ema_21) / ema_21) * 100 <= 1
+            and abs((curr_close - ema_26) / ema_26) * 100 <= 1
+        )
+        s3 = curr_vol > 100000 and curr_vol > sma_vol_30 and ema_bunched
+
+        # --- Screener 4 Check: Vol > 500k, Price > 100, Flag/Impulse continuation ---
+        pole_move = (close.iloc[-1] - close.iloc[-20]) / close.iloc[-20]
+        s4 = curr_vol > 500000 and curr_close > 100 and pole_move > 0.04
+
+        passed_count = sum([s1, s2, s3, s4])
+
+        if passed_count >= 2:  # Stock matches at least 2 or more screeners
+          results.append({
               "name": name,
               "ticker": ticker.split(".")[0],
-              "price": curr_price,
-          }
-
-          if short_pole > 0.02:
-            if dist_05 <= dist_382 and len(f_05) < 6:
-              f_05.append(entry)
-              seen_tickers.add(ticker)
-            elif dist_382 < dist_05 and len(f_382) < 6:
-              f_382.append(entry)
-              seen_tickers.add(ticker)
-          else:
-            if dist_05 <= dist_382 and len(c_05) < 6:
-              c_05.append(entry)
-              seen_tickers.add(ticker)
-            elif dist_382 < dist_05 and len(c_382) < 6:
-              c_382.append(entry)
-              seen_tickers.add(ticker)
+              "price": curr_close,
+              "matches": passed_count,
+              "details": f"Passed {passed_count}/4 Screeners",
+          })
     except Exception:
       pass
 
-  defaults = [
-      {"name": "Tata Motors", "ticker": "TATAMOTORS", "price": 1000.0},
-      {"name": "BHEL", "ticker": "BHEL", "price": 250.0},
-      {"name": "Trent", "ticker": "TRENT", "price": 6000.0},
-      {"name": "Apar Industries", "ticker": "APARINDS", "price": 8000.0},
-      {"name": "Mazagon Dock", "ticker": "MAZDOCK", "price": 4000.0},
-      {"name": "Cochin Shipyard", "ticker": "COCHINSHIP", "price": 1500.0},
-      {"name": "Persistent Systems", "ticker": "PERSISTENT", "price": 4500.0},
-      {"name": "KPIT Tech", "ticker": "KPITTECH", "price": 1600.0},
-      {"name": "Bharat Electronics", "ticker": "BEL", "price": 300.0},
-      {"name": "Kaynes Technology", "ticker": "KAYNES", "price": 4500.0},
-      {"name": "Deepak Fertilisers", "ticker": "DEEPAKFERT", "price": 1100.0},
-      {"name": "Jubilant Food", "ticker": "JUBLFOOD", "price": 700.0},
-      {"name": "Siemens", "ticker": "SIEMENS", "price": 7000.0},
-      {"name": "ABB India", "ticker": "ABB", "price": 6500.0},
-      {"name": "Tata Power", "ticker": "TATAPOWER", "price": 400.0},
-      {"name": "Adani Ports", "ticker": "ADANIPORTS", "price": 1400.0},
-      {"name": "Titan Company", "ticker": "TITAN", "price": 3500.0},
-      {"name": "Bajaj Finance", "ticker": "BAJFINANCE", "price": 7000.0},
-  ]
+  # Sort by highest matches across screeners
+  results = sorted(results, key=lambda x: x["matches"], reverse=True)
+  return results
 
-  def fill_bucket(bucket):
-    for d in defaults:
-      if len(bucket) >= 6:
-        break
-      if d not in bucket:
-        bucket.append(d)
-    return bucket[:6]
 
-  return (
-      fill_bucket(f_05),
-      fill_bucket(f_382),
-      fill_bucket(c_05),
-      fill_bucket(c_382),
+consensus_stocks = run_multi_screeners()
+
+if not consensus_stocks:
+  st.info(
+      "Scanning multi-screener rules... No stocks currently match the"
+      " intersection."
   )
-
-
-f_05, f_382, c_05, c_382 = scan_exact_fib_buckets_6()
-
-# --- Section A: Bull Flag Setups ---
-st.subheader("🚩 Bull Flag Setups (Automated Fib Retracement)")
-col1, col2 = st.columns(2)
-
-with col1:
-  st.markdown("#### Bull Flag near 0.5 Fib (6 Stocks)")
-  for stock in f_05:
-    st.markdown(
-        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
-    )
-
-with col2:
-  st.markdown("#### Bull Flag near 0.382 Fib (6 Stocks)")
-  for stock in f_382:
-    st.markdown(
-        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
-    )
-
-st.markdown("---")
-
-# --- Section B: Cup & Handle Setups ---
-st.subheader("☕ Cup & Handle Setups (Automated Fib Retracement)")
-col3, col4 = st.columns(2)
-
-with col3:
-  st.markdown("#### Cup & Handle near 0.5 Fib (6 Stocks)")
-  for stock in c_05:
-    st.markdown(
-        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
-    )
-
-with col4:
-  st.markdown("#### Cup & Handle near 0.382 Fib (6 Stocks)")
-  for stock in c_382:
-    st.markdown(
-        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
-    )
+else:
+  st.success(
+      f"Found {len(consensus_stocks)} consensus stocks matching multiple"
+      " screener rules!"
+  )
+  cols = st.columns(3)
+  for idx, stock in enumerate(consensus_stocks[:6]):
+    with cols[idx % 3]:
+      st.markdown(
+          f"### ⭐ {stock['name']} (`{stock['ticker']}`)\n"
+          f"**Price:** ₹{stock['price']:,.2f}  \n"
+          f"**Screener Status:** {stock['details']}"
+      )
+      st.markdown("---")

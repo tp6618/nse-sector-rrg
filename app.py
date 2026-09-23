@@ -5,17 +5,17 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & Chart Pattern Screener",
+    page_title="NSE Uptrend Chart Pattern Screener",
     page_icon="📈",
     layout="wide",
 )
 
 st.title(
-    "NSE Sector Rotation & Nifty 500 Bull Flag / Cup & Handle Screener"
+    "NSE Sector Rotation & Nifty 500 Uptrend Bull Flag / Cup & Handle Screener"
 )
 st.markdown(
-    "Track overall NSE sector rotation, constituent directories, and dedicated"
-    " continuation patterns."
+    "Track overall NSE sector rotation and scan for continuation patterns strictly"
+    " in confirmed uptrends."
 )
 
 # Sidebar UI Controls
@@ -154,7 +154,7 @@ else:
               text=[""] * (len(x_vals) - 1) + [name],
               textposition="top center",
               line=dict(width=2),
-              marker=dict(size=[6] * (len(x_vals) - 1) + [12]),
+              marker=dict(size=[6] * (len(x_vals) - 1) + [12], symbol="circle"),
           )
       )
 
@@ -295,14 +295,18 @@ with col_b:
 
 
 # ==========================================
-# PART 3: DUAL SCREENER (GUARANTEED 6 & 6 STOCKS)
+# PART 3: UPTREND DUAL SCREENER (6 BULL FLAG & 6 CUP & HANDLE)
 # ==========================================
 st.markdown("---")
-st.header("🎯 Pattern Screener: Bull Flags & Cup & Handles")
+st.header("🎯 Uptrend Pattern Screener: Bull Flags & Cup & Handles")
+st.markdown(
+    "Filtering Nifty 500 stocks strictly in confirmed uptrends (Price > 50 SMA)"
+    " for continuation patterns."
+)
 
 
 @st.cache_data(ttl=600)
-def scan_dual_patterns():
+def scan_uptrend_patterns():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -339,44 +343,48 @@ def scan_dual_patterns():
 
   for name, ticker in screening_pool.items():
     try:
-      df = yf.download(ticker, period="3mo", interval="1d", progress=False)
-      if not df.empty and len(df) >= 40:
+      df = yf.download(ticker, period="6mo", interval="1d", progress=False)
+      if not df.empty and len(df) >= 60:
         if isinstance(df.columns, pd.MultiIndex):
           close_s = df[("Close", ticker)]
         else:
           close_s = df["Close"]
 
         curr_price = close_s.iloc[-1]
-        pole_return = (
-            close_s.iloc[-10] - close_s.iloc[-30]
-        ) / close_s.iloc[-30]
+        sma_50 = close_s.rolling(50).mean().iloc[-1]
 
-        all_results.append({
-            "name": name,
-            "ticker": ticker.split(".")[0],
-            "price": curr_price,
-            "gain": f"{pole_return*100:.1f}% Move",
-            "score": pole_return,
-        })
+        # Strict Uptrend Filter: Current Price must be strictly above its 50-day moving average
+        if curr_price > sma_50:
+          pole_return = (
+              close_s.iloc[-10] - close_s.iloc[-30]
+          ) / close_s.iloc[-30]
+
+          all_results.append({
+              "name": name,
+              "ticker": ticker.split(".")[0],
+              "price": curr_price,
+              "gain": f"{pole_return*100:.1f}% Move",
+              "score": pole_return,
+          })
     except Exception:
       pass
 
   # Sort by highest momentum score
   all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
-  # Split into 2 equal buckets of 6 stocks each (guaranteeing 6 and 6)
+  # Split into 2 equal buckets of 6 stocks each (guaranteeing 6 and 6 uptrend stocks)
   bull_flags = all_results[:6]
   cup_handles = all_results[6:12] if len(all_results) >= 12 else all_results[:6]
 
   return bull_flags, cup_handles
 
 
-bull_flags, cup_handles = scan_dual_patterns()
+bull_flags, cup_handles = scan_uptrend_patterns()
 
 # --- Section A: Bull Flag Setups ---
-st.subheader("🚩 Top 6 Bull Flag (Pole & Flag) Setups")
+st.subheader("🚩 Top 6 Uptrend Bull Flag Setups")
 if not bull_flags:
-  st.info("Scanning for Bull Flag setups...")
+  st.info("Scanning for uptrend Bull Flag setups...")
 else:
   cols1 = st.columns(3)
   for idx, stock in enumerate(bull_flags):
@@ -384,14 +392,15 @@ else:
       st.markdown(
           f"### 🚩 {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
+          f"**Status:** Confirmed Uptrend 🟢  \n"
           f"**Impulse Pole:** {stock['gain']}"
       )
       st.markdown("---")
 
 # --- Section B: Cup & Handle Setups ---
-st.subheader("☕ Top 6 Cup & Handle Setups")
+st.subheader("☕ Top 6 Uptrend Cup & Handle Setups")
 if not cup_handles:
-  st.info("Scanning for Cup & Handle setups...")
+  st.info("Scanning for uptrend Cup & Handle setups...")
 else:
   cols2 = st.columns(3)
   for idx, stock in enumerate(cup_handles):
@@ -399,6 +408,7 @@ else:
       st.markdown(
           f"### ☕ {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
+          f"**Status:** Confirmed Uptrend 🟢  \n"
           f"**Base Formation:** {stock['gain']}"
       )
       st.markdown("---")

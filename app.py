@@ -5,13 +5,14 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector & Stock Rotation RRG", page_icon="📈", layout="wide"
+    page_title="NSE Sector Rotation & Stock Directory",
+    page_icon="📈",
+    layout="wide",
 )
 
-st.title("NSE Sector & Stock Rotation (RRG) Dashboard")
+st.title("NSE Sector Rotation & Constituent Directory")
 st.markdown(
-    "Relative Rotation Graph tracking NSE sector rotation and stock-level"
-    " drill-downs."
+    "Track overall NSE sector rotation and view constituent stocks by sector."
 )
 
 # Sidebar UI Controls
@@ -20,7 +21,7 @@ timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
 # ==========================================
-# PART 1: ALL SECTORS ROTATION
+# PART 1: ALL SECTORS ROTATION CHART & SUMMARY
 # ==========================================
 st.header("🌐 All Sectors Rotation View")
 
@@ -202,206 +203,107 @@ else:
 
 
 # ==========================================
-# PART 2: STOCK-LEVEL DRILL-DOWN (NEW PARTITION)
+# PART 2: SECTOR CONSTITUENT STOCKS DIRECTORY
 # ==========================================
 st.markdown("---")
-st.header("🔍 Stock-Level Rotation (Drill-Down)")
+st.header("📋 Sector Constituent Stocks Directory")
 
-# Sector mapping database with stock tickers and their respective index benchmark
-stock_sector_db = {
-    "IT": {
-        "benchmark": "^CNXIT",
-        "stocks": {
-            "TCS": "TCS.NS",
-            "INFY": "INFY.NS",
-            "WIPRO": "WIPRO.NS",
-            "HCLTECH": "HCLTECH.NS",
-            "TECHM": "TECHM.NS",
-            "LTIM": "LTIM.NS",
-        },
-    },
-    "AUTO": {
-        "benchmark": "^CNXAUTO",
-        "stocks": {
-            "TATAMOTORS": "TATAMOTORS.NS",
-            "MARUTI": "MARUTI.NS",
-            "M&M": "M&M.NS",
-            "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
-            "HEROMOTOCO": "HEROMOTOCO.NS",
-        },
-    },
-    "PHARMA": {
-        "benchmark": "^CNXPHARMA",
-        "stocks": {
-            "SUNPHARMA": "SUNPHARMA.NS",
-            "DRREDDY": "DRREDDY.NS",
-            "CIPLA": "CIPLA.NS",
-            "DIVISLAB": "DIVISLAB.NS",
-            "APOLLOHOSP": "APOLLOHOSP.NS",
-        },
-    },
-    "FMCG": {
-        "benchmark": "^CNXFMCG",
-        "stocks": {
-            "HINDUNILVR": "HINDUNILVR.NS",
-            "ITC": "ITC.NS",
-            "NESTLEIND": "NESTLEIND.NS",
-            "BRITANNIA": "BRITANNIA.NS",
-            "TATACONSUM": "TATACONSUM.NS",
-        },
-    },
-    "METAL": {
-        "benchmark": "^CNXMETAL",
-        "stocks": {
-            "TATASTEEL": "TATASTEEL.NS",
-            "HINDALCO": "HINDALCO.NS",
-            "JSWSTEEL": "JSWSTEEL.NS",
-            "VEDL": "VEDL.NS",
-            "COALINDIA": "COALINDIA.NS",
-        },
-    },
-    "BANK": {
-        "benchmark": "^NSEBANK",
-        "stocks": {
-            "HDFCBANK": "HDFCBANK.NS",
-            "ICICIBANK": "ICICIBANK.NS",
-            "SBIN": "SBIN.NS",
-            "KOTAKBANK": "KOTAKBANK.NS",
-            "AXISBANK": "AXISBANK.NS",
-        },
-    },
+# Comprehensive database mapping sectors to their major constituent stocks
+sector_stocks_db = {
+    "IT": [
+        "TCS (TCS.NS)",
+        "Infosys (INFY.NS)",
+        "Wipro (WIPRO.NS)",
+        "HCL Technologies (HCLTECH.NS)",
+        "Tech Mahindra (TECHM.NS)",
+        "LTIMindtree (LTIM.NS)",
+        "Persistent Systems (PERSISTENT.NS)",
+        "Coforge (COFORGE.NS)",
+        "Mphasis (MPHASIS.NS)",
+    ],
+    "AUTO": [
+        "Tata Motors (TATAMOTORS.NS)",
+        "Maruti Suzuki (MARUTI.NS)",
+        "Mahindra & Mahindra (M&M.NS)",
+        "Bajaj Auto (BAJAJ-AUTO.NS)",
+        "Hero MotoCorp (HEROMOTOCO.NS)",
+        "Eicher Motors (EICHERMOT.NS)",
+        "TVS Motor (TVSMOTOR.NS)",
+        "Ashok Leyland (ASHOKLEY.NS)",
+    ],
+    "PHARMA": [
+        "Sun Pharmaceutical (SUNPHARMA.NS)",
+        "Dr. Reddy's Laboratories (DRREDDY.NS)",
+        "Cipla (CIPLA.NS)",
+        "Divi's Laboratories (DIVISLAB.NS)",
+        "Apollo Hospitals (APOLLOHOSP.NS)",
+        "Lupin (LUPIN.NS)",
+        "Torrent Pharma (TORNTPHARM.NS)",
+        "Mankind Pharma (MANKIND.NS)",
+    ],
+    "FMCG": [
+        "Hindustan Unilever (HINDUNILVR.NS)",
+        "ITC (ITC.NS)",
+        "Nestle India (NESTLEIND.NS)",
+        "Britannia Industries (BRITANNIA.NS)",
+        "Tata Consumer Products (TATACONSUM.NS)",
+        "Dabur India (DABUR.NS)",
+        "Marico (MARICO.NS)",
+        "Godrej Consumer (GODREJCP.NS)",
+    ],
+    "METAL": [
+        "Tata Steel (TATASTEEL.NS)",
+        "Hindalco Industries (HINDALCO.NS)",
+        "JSW Steel (JSWSTEEL.NS)",
+        "Vedanta (VEDL.NS)",
+        "Coal India (COALINDIA.NS)",
+        "NMDC (NMDC.NS)",
+        "Jindal Steel & Power (JSL.NS)",
+        "SAIL (SAIL.NS)",
+    ],
+    "BANK": [
+        "HDFC Bank (HDFCBANK.NS)",
+        "ICICI Bank (ICICIBANK.NS)",
+        "State Bank of India (SBIN.NS)",
+        "Kotak Mahindra Bank (KOTAKBANK.NS)",
+        "Axis Bank (AXISBANK.NS)",
+        "IndusInd Bank (INDUSINDBK.NS)",
+        "Bank of Baroda (BANKBARODA.NS)",
+        "Punjab National Bank (PNB.NS)",
+    ],
+    "REALTY": [
+        "DLF (DLF.NS)",
+        "Godrej Properties (GODREJPROP.NS)",
+        "Oberoi Realty (OBEROIRLTY.NS)",
+        "Prestige Estates (PRESTIGE.NS)",
+        "Phoenix Mills (PHOENIXLTD.NS)",
+    ],
+    "ENERGY / OIL & GAS": [
+        "Reliance Industries (RELIANCE.NS)",
+        "ONGC (ONGC.NS)",
+        "NTPC (NTPC.NS)",
+        "Power Grid Corp (POWERGRID.NS)",
+        "BPCL (BPCL.NS)",
+        "IOC (IOC.NS)",
+        "GAIL (GAIL.NS)",
+    ],
 }
 
-selected_sector = st.selectbox(
-    "Select Sector to View Constituent Stocks", list(stock_sector_db.keys())
+selected_directory_sector = st.selectbox(
+    "Select a Sector to View Constituent Stocks", list(sector_stocks_db.keys())
 )
 
-sec_info = stock_sector_db[selected_sector]
-stock_bench = sec_info["benchmark"]
-stocks_dict = sec_info["stocks"]
+st.markdown(f"### Stocks in {selected_directory_sector} Sector:")
+stocks_list = sector_stocks_db[selected_directory_sector]
 
-# Fetch stock data against sector index
-data_stocks = fetch_data(timeframe, stock_bench, stocks_dict)
+# Display stocks in clean columns or bullet lists
+col_a, col_b = st.columns(2)
+half_len = (len(stocks_list) + 1) // 2
 
-if stock_bench not in data_stocks.columns:
-  st.warning(
-      f"Could not load benchmark index for {selected_sector}. Try another"
-      " sector."
-  )
-else:
-  s_bench_series = data_stocks[stock_bench]
-  s_ratio_df = pd.DataFrame(index=data_stocks.index)
-  s_mom_df = pd.DataFrame(index=data_stocks.index)
+with col_a:
+  for stock in stocks_list[:half_len]:
+    st.markdown(f"✅ {stock}")
 
-  for s_name in stocks_dict.keys():
-    if s_name in data_stocks.columns:
-      st_series = data_stocks[s_name]
-      rs = st_series / s_bench_series
-      sma_rs = rs.rolling(window=14).mean()
-      ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
-      momentum = 100 + ratio.diff(1)
-      s_ratio_df[s_name] = ratio
-      s_mom_df[s_name] = momentum
-
-  s_ratio_df.dropna(inplace=True)
-  s_mom_df.dropna(inplace=True)
-
-  if not s_ratio_df.empty:
-    fig_stk = go.Figure()
-    fig_stk.add_hline(y=100, line_dash="dash", line_color="gray")
-    fig_stk.add_vline(x=100, line_dash="dash", line_color="gray")
-
-    # Watermarks for stocks partition
-    fig_stk.add_annotation(
-        x=107,
-        y=108,
-        text="<b>LEADING</b>",
-        showarrow=False,
-        font=dict(size=20, color="rgba(40, 167, 69, 0.25)"),
-    )
-    fig_stk.add_annotation(
-        x=93,
-        y=108,
-        text="<b>IMPROVING</b>",
-        showarrow=False,
-        font=dict(size=20, color="rgba(0, 123, 255, 0.25)"),
-    )
-    fig_stk.add_annotation(
-        x=93,
-        y=92,
-        text="<b>LAGGING</b>",
-        showarrow=False,
-        font=dict(size=20, color="rgba(220, 53, 69, 0.25)"),
-    )
-    fig_stk.add_annotation(
-        x=107,
-        y=92,
-        text="<b>WEAKENING</b>",
-        showarrow=False,
-        font=dict(size=20, color="rgba(255, 193, 7, 0.35)"),
-    )
-
-    for s_name in s_ratio_df.columns:
-      x_vals = s_ratio_df[s_name].tail(tail_length)
-      y_vals = s_mom_df[s_name].tail(tail_length)
-      fig_stk.add_trace(
-          go.Scatter(
-              x=x_vals,
-              y=y_vals,
-              mode="lines+markers+text",
-              name=s_name,
-              text=[""] * (len(x_vals) - 1) + [s_name],
-              textposition="top center",
-              line=dict(width=2),
-              marker=dict(size=[6] * (len(x_vals) - 1) + [12]),
-          )
-      )
-
-    fig_stk.update_layout(
-        title=(
-            f"{selected_sector} Stocks Rotation Graph — {timeframe} View"
-            f" (Benchmark: {stock_bench})"
-        ),
-        xaxis_title="RS-Ratio",
-        yaxis_title="RS-Momentum",
-        xaxis=dict(range=[90, 110]),
-        yaxis=dict(range=[90, 110]),
-        height=650,
-        template="plotly_white",
-    )
-    st.plotly_chart(fig_stk, use_container_width=True)
-
-    # Quadrant Summary for Stocks of Selected Sector
-    st.subheader(f"📊 {selected_sector} Stocks Quadrant Summary")
-    st_latest_r = s_ratio_df.iloc[-1]
-    st_latest_m = s_mom_df.iloc[-1]
-    s_lead, s_weak, s_lag, s_imp = [], [], [], []
-
-    for s_name in s_ratio_df.columns:
-      r, m = st_latest_r[s_name], st_latest_m[s_name]
-      if r >= 100 and m >= 100:
-        s_lead.append(s_name)
-      elif r >= 100 and m < 100:
-        s_weak.append(s_name)
-      elif r < 100 and m < 100:
-        s_lag.append(s_name)
-      else:
-        s_imp.append(s_name)
-
-    sc1, sc2, sc3, sc4 = st.columns(4)
-    with sc1:
-      st.markdown("#### 🟢 Leading")
-      for s in s_lead:
-        st.markdown(f"- **{s}**")
-    with sc2:
-      st.markdown("#### 🔵 Improving")
-      for s in s_imp:
-        st.markdown(f"- **{s}**")
-    with sc3:
-      st.markdown("#### 🟡 Weakening")
-      for s in s_weak:
-        st.markdown(f"- **{s}**")
-    with sc4:
-      st.markdown("#### 🔴 Lagging")
-      for s in s_lag:
-        st.markdown(f"- **{s}**")
+with col_b:
+  for stock in stocks_list[half_len:]:
+    st.markdown(f"✅ {stock}")

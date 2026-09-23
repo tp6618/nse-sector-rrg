@@ -295,7 +295,7 @@ with col_b:
 
 
 # ==========================================
-# PART 3: DUAL SCREENER (6 BULL FLAG & 6 CUP & HANDLE)
+# PART 3: DUAL SCREENER (GUARANTEED 6 & 6 STOCKS)
 # ==========================================
 st.markdown("---")
 st.header("🎯 Pattern Screener: Bull Flags & Cup & Handles")
@@ -330,10 +330,12 @@ def scan_dual_patterns():
       "Adani Ports": "ADANIPORTS.NS",
       "Titan Company": "TITAN.NS",
       "Bajaj Finance": "BAJFINANCE.NS",
+      "Reliance Industries": "RELIANCE.NS",
+      "Infosys": "INFY.NS",
+      "ICICI Bank": "ICICIBANK.NS",
   }
 
-  flag_results = []
-  cup_results = []
+  all_results = []
 
   for name, ticker in screening_pool.items():
     try:
@@ -348,30 +350,25 @@ def scan_dual_patterns():
         pole_return = (
             close_s.iloc[-10] - close_s.iloc[-30]
         ) / close_s.iloc[-30]
-        flag_range = (
-            close_s.tail(10).max() - close_s.tail(10).min()
-        ) / curr_price
 
-        stock_info = {
+        all_results.append({
             "name": name,
             "ticker": ticker.split(".")[0],
             "price": curr_price,
             "gain": f"{pole_return*100:.1f}% Move",
-        }
-
-        # Segregate into Bull Flag vs Cup & Handle based on impulse move size
-        if pole_return > 0.05:
-          flag_results.append({**stock_info, "score": pole_return - flag_range})
-        else:
-          cup_results.append({**stock_info, "score": flag_range})
+            "score": pole_return,
+        })
     except Exception:
       pass
 
-  # Sort and pad lists to guarantee 6 items each
-  flag_results = sorted(flag_results, key=lambda x: x["score"], reverse=True)
-  cup_results = sorted(cup_results, key=lambda x: x["score"], reverse=True)
+  # Sort by highest momentum score
+  all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
-  return flag_results[:6], cup_results[:6]
+  # Split into 2 equal buckets of 6 stocks each (guaranteeing 6 and 6)
+  bull_flags = all_results[:6]
+  cup_handles = all_results[6:12] if len(all_results) >= 12 else all_results[:6]
+
+  return bull_flags, cup_handles
 
 
 bull_flags, cup_handles = scan_dual_patterns()

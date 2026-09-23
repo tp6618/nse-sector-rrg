@@ -5,15 +5,13 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation & Live News",
-    page_icon="📈",
-    layout="wide",
+    page_title="NSE Sector Rotation Dashboard", page_icon="📈", layout="wide"
 )
 
-st.title("NSE Sector Rotation & Live Market News")
+st.title("NSE Sector Rotation & Live Performance Dashboard")
 st.markdown(
-    "Track overall NSE sector rotation, view constituent stocks, and get"
-    " real-time news updates."
+    "Track overall NSE sector rotation, view constituent stocks, and monitor"
+    " live sector performance."
 )
 
 # Sidebar UI Controls
@@ -293,61 +291,31 @@ with col_b:
 
 
 # ==========================================
-# PART 3: NEWS STOCKS (REAL-TIME YFINANCE FEED)
+# PART 3: LIVE SECTOR PERFORMANCE METRICS
 # ==========================================
 st.markdown("---")
-st.header("📰 NEWS Stocks (Real-Time Market Feed)")
-st.markdown(
-    "Real-time market headlines and stock news fetched directly via live"
-    " feeds."
-)
+st.header("📊 Live Sector Performance")
+st.markdown("Real-time price levels and daily percentage changes by sector.")
 
+col_count = 4
+cols = st.column(col_count) if hasattr(st, "column") else st.columns(col_count)
 
-@st.cache_data(ttl=600)
-def fetch_yf_news():
-  news_list = []
-  try:
-    # Pull news directly from Nifty 50 and major market tickers
-    tickers_to_check = ["^NSEI", "RELIANCE.NS", "TCS.NS", "INFY.NS", "SBIN.NS"]
-    for t_sym in tickers_to_check:
-      t_obj = yf.Ticker(t_sym)
-      if hasattr(t_obj, "news") and t_obj.news:
-        for item in t_obj.news:
-          # Handle different yfinance news JSON structures securely
-          if "content" in item:
-            title = item["content"].get("title", "")
-            provider = item["content"].get("provider", {}).get("displayName", "")
-            click_url = item["content"].get("clickThroughUrl", {}).get("url", "#")
-            pub_time = item["content"].get("pubDate", "")
-          else:
-            title = item.get("title", "")
-            provider = item.get("publisher", "")
-            click_url = item.get("link", "#")
-            pub_time = item.get("providerPublishTime", "")
-
-          if title and title not in [n["title"] for n in news_list]:
-            news_list.append(
-                {
-                    "title": title,
-                    "publisher": provider,
-                    "link": click_url,
-                    "time": str(pub_time),
-                }
-            )
-  except Exception as e:
-    print(f"News fetch error: {e}")
-  return news_list[:15]  # Return top 15 unique headlines
-
-
-live_news = fetch_yf_news()
-
-if not live_news:
-  st.info("No recent news headlines available at the moment.")
-else:
-  for idx, news in enumerate(live_news):
-    with st.container():
-      publisher_tag = f" *({news['publisher']})*" if news["publisher"] else ""
-      st.markdown(
-          f"**{idx+1}. [{news['title']}]({news['link']}){publisher_tag}**"
-      )
-      st.markdown("---")
+sector_items = list(sectors_dict.items())
+for idx, (sec_name, sec_ticker) in enumerate(sector_items):
+  col_idx = idx % col_count
+  with st.columns(col_count)[col_idx]:
+    try:
+      t_obj = yf.Ticker(sec_ticker)
+      hist = t_obj.history(period="2d")
+      if len(hist) >= 2:
+        curr_price = hist["Close"].iloc[-1]
+        prev_price = hist["Close"].iloc[-2]
+        pct_chg = ((curr_price - prev_price) / prev_price) * 100
+        color = "green" if pct_chg >= 0 else "red"
+        st.markdown(
+            f"**NIFTY {sec_name}**\n\n`{curr_price:,.2f}`\n\n:{"green" if pct_chg>=0 else "red"}[{pct_chg:+.2f}%]"
+        )
+      else:
+        st.markdown(f"**NIFTY {sec_name}**\n\nData loading...")
+    except Exception:
+      st.markdown(f"**NIFTY {sec_name}**\n\nUnavailable")

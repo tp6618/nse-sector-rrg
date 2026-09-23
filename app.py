@@ -19,7 +19,7 @@ st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Benchmark and Sector Tickers
+# Benchmark and Sector Tickers (Using reliable standard NSE index symbols)
 benchmark = "^NSEI"
 sectors = {
     "IT": "^CNXIT",
@@ -29,9 +29,6 @@ sectors = {
     "METAL": "^CNXMETAL",
     "REALTY": "^CNXREALTY",
     "ENERGY": "^CNXENERGY",
-    "PSU BANK": "^CNXPSUBANK",
-    "PVT BANK": "^CNXPVTBNK",
-    "MEDIA": "^CNXMEDIA",
     "INFRA": "^CNXINFRA",
 }
 
@@ -42,32 +39,27 @@ def fetch_data(tf):
   interval = "1d" if tf == "Daily" else "1wk"
 
   all_tickers = list(sectors.values()) + [benchmark]
-  df_dict = {}
 
-  for ticker in all_tickers:
-    try:
-      df = yf.download(
-          ticker, period=period, interval=interval, progress=False
-      )
-      if not df.empty:
-        if isinstance(df.columns, pd.MultiIndex):
-          close_series = df[("Close", ticker)]
-        else:
-          close_series = df["Close"]
-        df_dict[ticker] = close_series.squeeze()
-    except Exception as e:
-      print(f"Error fetching {ticker}: {e}")
+  # Download all tickers at once to avoid separate request limits
+  df = yf.download(
+      all_tickers, period=period, interval=interval, progress=False
+  )["Close"]
 
-  combined_df = pd.DataFrame(df_dict)
-  combined_df.dropna(how="all", inplace=True)
-  return combined_df
+  if isinstance(df.columns, pd.MultiIndex):
+    df.columns = df.columns.get_level_values(0)
+
+  df.dropna(how="all", inplace=True)
+  return df
 
 
 # Load Data
 data = fetch_data(timeframe)
 
 if benchmark not in data.columns:
-  st.error("Benchmark data could not be retrieved.")
+  st.error(
+      "Benchmark data could not be retrieved. Please check your network or"
+      " ticker symbols."
+  )
 else:
   bench_series = data[benchmark]
 
@@ -78,12 +70,15 @@ else:
   for name, ticker in sectors.items():
     if ticker in data.columns:
       sec_series = data[ticker]
-      rs = sec_series / bench_series
-      sma_rs = rs.rolling(window=14).mean()
-      ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
-      momentum = 100 + ratio.diff(1)
-      ratio_df[name] = ratio
-      mom_df[name] = momentum
+      # Drop missing rows for individual sectors to prevent blank plots
+      temp_df = pd.concat([sec_series, bench_series], axis=1).dropna()
+      if not temp_df.empty:
+        rs = temp_df.iloc[:, 0] / temp_df.iloc[:, 1]
+        sma_rs = rs.rolling(window=14).mean()
+        ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
+        momentum = 100 + ratio.diff(1)
+        ratio_df[name] = ratio
+        mom_df[name] = momentum
 
   ratio_df.dropna(inplace=True)
   mom_df.dropna(inplace=True)
@@ -91,9 +86,11 @@ else:
   # Build Plotly RRG Chart
   fig = go.Figure()
 
+  # Quadrant reference lines centered at 100
   fig.add_hline(y=100, line_dash="dash", line_color="gray")
   fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
+  # Plot each sector's trailing path and current position dot
   for name in sectors.keys():
     if name in ratio_df.columns and not ratio_df[name].empty:
       x_vals = ratio_df[name].tail(tail_length)
@@ -108,7 +105,7 @@ else:
               text=[""] * (len(x_vals) - 1) + [name],
               textposition="top center",
               line=dict(width=2),
-              marker=dict(size=[6] * (len(x_vals) - 1) + [12]),
+              marker=dict(size=[6] * (len(x_vals) - 1) + [12], symbol="circle"),
           )
       )
 
@@ -151,19 +148,19 @@ else:
   with col1:
     st.markdown("#### 🟢 Leading")
     for s in leading:
-      st.markdown(f"- **{s}**")
+        st.markdown(f"- **{s}**")
 
   with col2:
     st.markdown("#### 🔵 Improving")
     for s in improving:
-      st.markdown(f"- **{s}**")
+        st.markdown(f"- **{s}**")
 
   with col3:
     st.markdown("#### 🟡 Weakening")
     for s in weakening:
-      st.markdown(f"- **{s}**")
+        st.markdown(f"- **{s}**")
 
   with col4:
     st.markdown("#### 🔴 Lagging")
     for s in lagging:
-      st.markdown(f"- **{s}**")
+        st.markdown(f"- **{s}**")

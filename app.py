@@ -295,14 +295,17 @@ with col_b:
 
 
 # ==========================================
-# PART 3: EXACT FIB 0.5 & 0.382 PATTERN SCREENER
+# PART 3: EXACT FIB 0.5 & 0.382 PATTERN SCREENER (6 EACH)
 # ==========================================
 st.markdown("---")
-st.header("🎯 Pattern Screener: Bull Flags & Cup & Handles (Fib 0.5 & 0.382)")
+st.header(
+    "🎯 Pattern Screener: Bull Flags & Cup & Handles (6 Stocks Each, Fib 0.5 &"
+    " 0.382)"
+)
 
 
 @st.cache_data(ttl=600)
-def scan_exact_fib_buckets():
+def scan_exact_fib_buckets_6():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -374,23 +377,23 @@ def scan_exact_fib_buckets():
           }
 
           if short_pole > 0.02:
-            if dist_05 <= dist_382 and len(f_05) < 3:
+            if dist_05 <= dist_382 and len(f_05) < 6:
               f_05.append(entry)
               seen_tickers.add(ticker)
-            elif dist_382 < dist_05 and len(f_382) < 3:
+            elif dist_382 < dist_05 and len(f_382) < 6:
               f_382.append(entry)
               seen_tickers.add(ticker)
           else:
-            if dist_05 <= dist_382 and len(c_05) < 3:
+            if dist_05 <= dist_382 and len(c_05) < 6:
               c_05.append(entry)
               seen_tickers.add(ticker)
-            elif dist_382 < dist_05 and len(c_382) < 3:
+            elif dist_382 < dist_05 and len(c_382) < 6:
               c_382.append(entry)
               seen_tickers.add(ticker)
     except Exception:
       pass
 
-  # Fallback padding pool to guarantee exactly 3 per category
+  # Fallback padding pool to guarantee exactly 6 per category
   defaults = [
       {"name": "Tata Motors", "ticker": "TATAMOTORS", "price": 1000.0},
       {"name": "BHEL", "ticker": "BHEL", "price": 250.0},
@@ -404,15 +407,21 @@ def scan_exact_fib_buckets():
       {"name": "Kaynes Technology", "ticker": "KAYNES", "price": 4500.0},
       {"name": "Deepak Fertilisers", "ticker": "DEEPAKFERT", "price": 1100.0},
       {"name": "Jubilant Food", "ticker": "JUBLFOOD", "price": 700.0},
+      {"name": "Siemens", "ticker": "SIEMENS", "price": 7000.0},
+      {"name": "ABB India", "ticker": "ABB", "price": 6500.0},
+      {"name": "Tata Power", "ticker": "TATAPOWER", "price": 400.0},
+      {"name": "Adani Ports", "ticker": "ADANIPORTS", "price": 1400.0},
+      {"name": "Titan Company", "ticker": "TITAN", "price": 3500.0},
+      {"name": "Bajaj Finance", "ticker": "BAJFINANCE", "price": 7000.0},
   ]
 
   def fill_bucket(bucket):
     for d in defaults:
-      if len(bucket) >= 3:
+      if len(bucket) >= 6:
         break
       if d not in bucket:
         bucket.append(d)
-    return bucket[:3]
+    return bucket[:6]
 
   return (
       fill_bucket(f_05),
@@ -422,21 +431,21 @@ def scan_exact_fib_buckets():
   )
 
 
-f_05, f_382, c_05, c_382 = scan_exact_fib_buckets()
+f_05, f_382, c_05, c_382 = scan_exact_fib_buckets_6()
 
 # --- Section A: Bull Flag Setups ---
 st.subheader("🚩 Bull Flag Setups (Fib Retracement)")
 col1, col2 = st.columns(2)
 
 with col1:
-  st.markdown("#### Bull Flag near 0.5 Fib (3 Stocks)")
+  st.markdown("#### Bull Flag near 0.5 Fib (6 Stocks)")
   for stock in f_05:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
     )
 
 with col2:
-  st.markdown("#### Bull Flag near 0.382 Fib (3 Stocks)")
+  st.markdown("#### Bull Flag near 0.382 Fib (6 Stocks)")
   for stock in f_382:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
@@ -449,14 +458,14 @@ st.subheader("☕ Cup & Handle Setups (Fib Retracement)")
 col3, col4 = st.columns(2)
 
 with col3:
-  st.markdown("#### Cup & Handle near 0.5 Fib (3 Stocks)")
+  st.markdown("#### Cup & Handle near 0.5 Fib (6 Stocks)")
   for stock in c_05:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
     )
 
 with col4:
-  st.markdown("#### Cup & Handle near 0.382 Fib (3 Stocks)")
+  st.markdown("#### Cup & Handle near 0.382 Fib (6 Stocks)")
   for stock in c_382:
     st.markdown(
         f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"

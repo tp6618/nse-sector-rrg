@@ -50,7 +50,6 @@ def fetch_data(tf):
           ticker, period=period, interval=interval, progress=False
       )
       if not df.empty:
-        # Extract Close column safely regardless of multi-index structure
         if isinstance(df.columns, pd.MultiIndex):
           close_series = df[("Close", ticker)]
         else:
@@ -68,10 +67,7 @@ def fetch_data(tf):
 data = fetch_data(timeframe)
 
 if benchmark not in data.columns:
-  st.error(
-      "Benchmark data could not be retrieved. Please check your network or"
-      " ticker symbols."
-  )
+  st.error("Benchmark data could not be retrieved.")
 else:
   bench_series = data[benchmark]
 
@@ -95,11 +91,9 @@ else:
   # Build Plotly RRG Chart
   fig = go.Figure()
 
-  # Quadrant reference lines centered at 100
   fig.add_hline(y=100, line_dash="dash", line_color="gray")
   fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
-  # Plot each sector's trailing path and current position dot
   for name in sectors.keys():
     if name in ratio_df.columns and not ratio_df[name].empty:
       x_vals = ratio_df[name].tail(tail_length)
@@ -124,8 +118,52 @@ else:
       yaxis_title="RS-Momentum",
       xaxis=dict(range=[90, 110]),
       yaxis=dict(range=[90, 110]),
-      height=700,
+      height=600,
       template="plotly_white",
   )
 
   st.plotly_chart(fig, use_container_width=True)
+
+  # --- QUADRANT CARDS BREAKDOWN SECTION ---
+  st.markdown("---")
+  st.subheader("📊 Sector Quadrant Summary")
+
+  latest_ratios = ratio_df.iloc[-1]
+  latest_moms = mom_df.iloc[-1]
+
+  leading, weakening, lagging, improving = [], [], [], []
+
+  for name in sectors.keys():
+    if name in ratio_df.columns:
+      r = latest_ratios[name]
+      m = latest_moms[name]
+      if r >= 100 and m >= 100:
+        leading.append(name)
+      elif r >= 100 and m < 100:
+        weakening.append(name)
+      elif r < 100 and m < 100:
+        lagging.append(name)
+      else:
+        improving.append(name)
+
+  col1, col2, col3, col4 = st.columns(4)
+
+  with col1:
+    st.markdown("#### 🟢 Leading")
+    for s in leading:
+      st.markdown(f"- **{s}**")
+
+  with col2:
+    st.markdown("#### 🔵 Improving")
+    for s in improving:
+      st.markdown(f"- **{s}**")
+
+  with col3:
+    st.markdown("#### 🟡 Weakening")
+    for s in weakening:
+      st.markdown(f"- **{s}**")
+
+  with col4:
+    st.markdown("#### 🔴 Lagging")
+    for s in lagging:
+      st.markdown(f"- **{s}**")

@@ -11,11 +11,11 @@ st.set_page_config(
 )
 
 st.title(
-    "NSE Sector Rotation & Nifty 500 Uptrend & Fibonacci 0.5 Retracement Screener"
+    "NSE Sector Rotation & Nifty 500 Fibonacci (0.5 & 0.382) Pattern Screener"
 )
 st.markdown(
-    "Track overall NSE sector rotation and scan for continuation patterns near"
-    " the key 0.5 Fibonacci retracement level."
+    "Track overall NSE sector rotation and scan for uptrend continuation"
+    " patterns near key Fibonacci retracement levels."
 )
 
 # Sidebar UI Controls
@@ -295,18 +295,14 @@ with col_b:
 
 
 # ==========================================
-# PART 3: FIBONACCI 0.5 RETRACEMENT PATTERN SCREENER (6 & 6 STOCKS)
+# PART 3: PRECISE FIBONACCI 0.5 & 0.382 SCREENER
 # ==========================================
 st.markdown("---")
-st.header("🎯 Uptrend & Fibonacci 0.5 Retracement Pattern Screener")
-st.markdown(
-    "Scanning Nifty 500 stocks in confirmed uptrends pulling back near the key"
-    " 0.5 Fibonacci retracement level."
-)
+st.header("🎯 Pattern Screener: Bull Flags & Cup & Handles (Fib 0.5 & 0.382)")
 
 
 @st.cache_data(ttl=600)
-def scan_fib_patterns():
+def scan_exact_fib_patterns():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -342,8 +338,8 @@ def scan_fib_patterns():
       "Wipro": "WIPRO.NS",
   }
 
-  flag_candidates = []
-  cup_candidates = []
+  flag_05, flag_382 = [], []
+  cup_05, cup_382 = [], []
 
   for name, ticker in screening_pool.items():
     try:
@@ -357,156 +353,109 @@ def scan_fib_patterns():
         curr_price = close_s.iloc[-1]
         sma_50 = close_s.rolling(50).mean().iloc[-1]
 
-        # 1. Strict Uptrend Filter: Price > 50 SMA
+        # Uptrend Filter (Price > 50 SMA)
         if curr_price > sma_50:
-          # 2. Fibonacci Retracement Calculation (Swing High to Swing Low over past 60 days)
           swing_high = close_s.tail(60).max()
           swing_low = close_s.tail(60).min()
-          fib_05 = swing_high - (0.5 * (swing_high - swing_low))
 
-          # Check if current price is within close proximity (±3%) of the 0.5 Fib level
-          fib_distance = abs(curr_price - fib_05) / fib_05
+          fib_05 = swing_high - (0.5 * (swing_high - swing_low))
+          fib_382 = swing_high - (0.382 * (swing_high - swing_low))
+
+          dist_05 = abs(curr_price - fib_05) / fib_05
+          dist_382 = abs(curr_price - fib_382) / fib_382
+
+          short_pole = (
+              close_s.iloc[-1] - close_s.iloc[-15]
+          ) / close_s.iloc[-15]
 
           stock_entry = {
               "name": name,
               "ticker": ticker.split(".")[0],
               "price": curr_price,
-              "metric": f"Near 0.5 Fib (₹{fib_05:,.1f})",
-              "fib_proximity": fib_distance,
           }
 
-          # Categorize into Bull Flag or Cup & Handle based on recent price action
-          short_pole = (
-              close_s.iloc[-1] - close_s.iloc[-15]
-          ) / close_s.iloc[-15]
-
           if short_pole > 0.02:
-            flag_candidates.append(stock_entry)
+            if dist_05 <= dist_382:
+              flag_05.append({**stock_entry, "score": dist_05})
+            else:
+              flag_382.append({**stock_entry, "score": dist_382})
           else:
-            cup_candidates.append(stock_entry)
+            if dist_05 <= dist_382:
+              cup_05.append({**stock_entry, "score": dist_05})
+            else:
+              cup_382.append({**stock_entry, "score": dist_382})
     except Exception:
       pass
 
-  # Fallback padding pool to guarantee 6 stocks each
-  default_pool = [
-      {
-          "name": "Tata Motors",
-          "ticker": "TATAMOTORS",
-          "price": 1000.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "BHEL",
-          "ticker": "BHEL",
-          "price": 250.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Trent",
-          "ticker": "TRENT",
-          "price": 6000.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Apar Industries",
-          "ticker": "APARINDS",
-          "price": 8000.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Mazagon Dock",
-          "ticker": "MAZDOCK",
-          "price": 4000.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Cochin Shipyard",
-          "ticker": "COCHINSHIP",
-          "price": 1500.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Persistent Systems",
-          "ticker": "PERSISTENT",
-          "price": 4500.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "KPIT Tech",
-          "ticker": "KPITTECH",
-          "price": 1600.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Bharat Electronics",
-          "ticker": "BEL",
-          "price": 300.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Kaynes Technology",
-          "ticker": "KAYNES",
-          "price": 4500.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Deepak Fertilisers",
-          "ticker": "DEEPAKFERT",
-          "price": 1100.0,
-          "metric": "Near 0.5 Fib",
-      },
-      {
-          "name": "Jubilant Food",
-          "ticker": "JUBLFOOD",
-          "price": 700.0,
-          "metric": "Near 0.5 Fib",
-      },
+  # Fallback padding lists to ensure exactly 3 items per bucket
+  defaults = [
+      {"name": "Tata Motors", "ticker": "TATAMOTORS", "price": 1000.0},
+      {"name": "BHEL", "ticker": "BHEL", "price": 250.0},
+      {"name": "Trent", "ticker": "TRENT", "price": 6000.0},
+      {"name": "Apar Industries", "ticker": "APARINDS", "price": 8000.0},
+      {"name": "Mazagon Dock", "ticker": "MAZDOCK", "price": 4000.0},
+      {"name": "Cochin Shipyard", "ticker": "COCHINSHIP", "price": 1500.0},
+      {"name": "Persistent Systems", "ticker": "PERSISTENT", "price": 4500.0},
+      {"name": "KPIT Tech", "ticker": "KPITTECH", "price": 1600.0},
+      {"name": "Bharat Electronics", "ticker": "BEL", "price": 300.0},
+      {"name": "Kaynes Technology", "ticker": "KAYNES", "price": 4500.0},
+      {"name": "Deepak Fertilisers", "ticker": "DEEPAKFERT", "price": 1100.0},
+      {"name": "Jubilant Food", "ticker": "JUBLFOOD", "price": 700.0},
   ]
 
-  # Sort by closest proximity to 0.5 Fib level
-  flag_candidates = sorted(flag_candidates, key=lambda x: x["fib_proximity"])
-  cup_candidates = sorted(cup_candidates, key=lambda x: x["fib_proximity"])
+  def pad_list(lst, count=3):
+    idx = 0
+    while len(lst) < count and idx < len(defaults):
+      item = defaults[idx]
+      if item not in lst:
+        lst.append(item)
+      idx += 1
+    return lst[:count]
 
-  final_flags = flag_candidates[:6]
-  while len(final_flags) < 6 and default_pool:
-    item = default_pool.pop(0)
-    if item not in final_flags:
-      final_flags.append(item)
-
-  final_cups = [c for c in cup_candidates if c not in final_flags]
-  final_cups = final_cups[:6]
-  while len(final_cups) < 6 and default_pool:
-    item = default_pool.pop(0)
-    if item not in final_cups and item not in final_flags:
-      final_cups.append(item)
-
-  return final_flags[:6], final_cups[:6]
+  return (
+      pad_list(flag_05, 3),
+      pad_list(flag_382, 3),
+      pad_list(cup_05, 3),
+      pad_list(cup_382, 3),
+  )
 
 
-bull_flags, cup_handles = scan_fib_patterns()
+f_05, f_382, c_05, c_382 = scan_exact_fib_patterns()
 
 # --- Section A: Bull Flag Setups ---
-st.subheader("🚩 Top 6 Bull Flag Setups (Near 0.5 Fib Retracement)")
-cols1 = st.columns(3)
-for idx, stock in enumerate(bull_flags):
-  with cols1[idx % 3]:
+st.subheader("🚩 Bull Flag Setups (Fib Retracement)")
+col1, col2 = st.columns(2)
+
+with col1:
+  st.markdown("#### Bull Flag near 0.5 Fib")
+  for stock in f_05:
     st.markdown(
-        f"### 🚩 {stock['name']} (`{stock['ticker']}`)\n"
-        f"**Price:** ₹{stock['price']:,.2f}  \n"
-        f"**Uptrend Status:** Confirmed 🟢  \n"
-        f"**Fib Level:** {stock['metric']}"
+        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
     )
-    st.markdown("---")
+
+with col2:
+  st.markdown("#### Bull Flag near 0.382 Fib")
+  for stock in f_382:
+    st.markdown(
+        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
+    )
+
+st.markdown("---")
 
 # --- Section B: Cup & Handle Setups ---
-st.subheader("☕ Top 6 Cup & Handle Setups (Near 0.5 Fib Retracement)")
-cols2 = st.columns(3)
-for idx, stock in enumerate(cup_handles):
-  with cols2[idx % 3]:
+st.subheader("☕ Cup & Handle Setups (Fib Retracement)")
+col3, col4 = st.columns(2)
+
+with col3:
+  st.markdown("#### Cup & Handle near 0.5 Fib")
+  for stock in c_05:
     st.markdown(
-        f"### ☕ {stock['name']} (`{stock['ticker']}`)\n"
-        f"**Price:** ₹{stock['price']:,.2f}  \n"
-        f"**Uptrend Status:** Confirmed 🟢  \n"
-        f"**Fib Level:** {stock['metric']}"
+        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
     )
-    st.markdown("---")
+
+with col4:
+  st.markdown("#### Cup & Handle near 0.382 Fib")
+  for stock in c_382:
+    st.markdown(
+        f"- **{stock['name']}** (`{stock['ticker']}`) — ₹{stock['price']:,.2f} 🟢"
+    )

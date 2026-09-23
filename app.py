@@ -5,13 +5,13 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Sector Rotation RRG", page_icon="📈", layout="wide"
+    page_title="Stock-Level Rotation RRG", page_icon="📈", layout="wide"
 )
 
-st.title("NSE Sector Rotation (RRG) Dashboard")
+st.title("Stock-Level Rotation (RRG) Dashboard")
 st.markdown(
-    "Relative Rotation Graph tracking all NSE sectors & top stocks against the"
-    " Nifty 50 benchmark."
+    "Track individual stock momentum and relative strength inside specific NSE"
+    " sectors against Nifty 50."
 )
 
 # Sidebar UI Controls
@@ -19,60 +19,73 @@ st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Benchmark and Comprehensive NSE Sector Tickers dictionary
+# Benchmark
 benchmark = "^NSEI"
-sectors = {
-    "AUTO": "^CNXAUTO",
-    "BANK": "^NSEBANK",
-    "FIN SERVICE": "^CNXFIN",
-    "FMCG": "^CNXFMCG",
-    "IT": "^CNXIT",
-    "MEDIA": "^CNXMEDIA",
-    "METAL": "^CNXMETAL",
-    "PHARMA": "^CNXPHARMA",
-    "PSU BANK": "^CNXPSUBANK",
-    "REALTY": "^CNXREALTY",
-    "PVT BANK": "^CNXPVTBNK",
-    "HEALTHCARE": "^CNXHEALTH",
-    "CONSR DURBL": "^CNXCONSUM",
-    "OIL & GAS": "^CNXENERGY",
-    "INFRA": "^CNXINFRA",
-    "COMMODITIES": "^CNXCMDT",
+
+# Dictionary mapping sectors to their major constituent stocks (NSE symbols)
+sector_stocks = {
+    "IT": {
+        "TCS": "TCS.NS",
+        "INFY": "INFY.NS",
+        "HCLTECH": "HCLTECH.NS",
+        "WIPRO": "WIPRO.NS",
+        "TECHM": "TECHM.NS",
+        "LTIM": "LTIM.NS",
+    },
+    "BANK": {
+        "HDFCBANK": "HDFCBANK.NS",
+        "ICICIBANK": "ICICIBANK.NS",
+        "SBIN": "SBIN.NS",
+        "KOTAKBANK": "KOTAKBANK.NS",
+        "AXISBANK": "AXISBANK.NS",
+        "INDUSINDBK": "INDUSINDBK.NS",
+    },
+    "AUTO": {
+        "TATAMOTORS": "TATAMOTORS.NS",
+        "MARUTI": "MARUTI.NS",
+        "M&M": "M-M.NS",
+        "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
+        "HEROMOTOCO": "HEROMOTOCO.NS",
+        "EICHERMOT": "EICHERMOT.NS",
+    },
+    "PHARMA": {
+        "SUNPHARMA": "SUNPHARMA.NS",
+        "DRREDDY": "DRREDDY.NS",
+        "CIPLA": "CIPLA.NS",
+        "DIVISLAB": "DIVISLAB.NS",
+        "APOLLOHOSP": "APOLLOHOSP.NS",
+        "LUPIN": "LUPIN.NS",
+    },
+    "METAL": {
+        "TATASTEEL": "TATASTEEL.NS",
+        "HINDALCO": "HINDALCO.NS",
+        "JSWSTEEL": "JSWSTEEL.NS",
+        "VEDL": "VEDL.NS",
+        "COALINDIA": "COALINDIA.NS",
+    },
+    "ENERGY": {
+        "RELIANCE": "RELIANCE.NS",
+        "ONGC": "ONGC.NS",
+        "BPCL": "BPCL.NS",
+        "NTPC": "NTPC.NS",
+        "POWERGRID": "POWERGRID.NS",
+    },
 }
 
-# Top representative stocks for each sector (Yahoo Finance NSE format)
-sector_stocks = {
-    "AUTO": ["TATAMOTORS.NS", "M&M.NS", "MARUTI.NS", "BAJAJ-AUTO.NS"],
-    "BANK": ["HDFCBANK.NS", "ICICIBANK.NS", "AXISBANK.NS", "KOTAKBANK.NS"],
-    "FIN SERVICE": ["BAJFINANCE.NS", "SBILIFE.NS", "HDFCLIFE.NS", "CHOLAFIN.NS"],
-    "FMCG": ["ITC.NS", "HINDUNILVR.NS", "NESTLEIND.NS", "BRITANNIA.NS"],
-    "IT": ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS"],
-    "MEDIA": ["SUNTV.NS", "ZEEL.NS", "PVRINOX.NS"],
-    "METAL": ["TATASTEEL.NS", "HINDALCO.NS", "JSWSTEEL.NS", "VEDL.NS"],
-    "PHARMA": ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS"],
-    "PSU BANK": ["SBIN.NS", "PNB.NS", "BANKBARODA.NS", "CANBK.NS"],
-    "REALTY": ["DLF.NS", "GODREJPROP.NS", "OBEROIRLTY.NS", "PHOENIXLTD.NS"],
-    "PVT BANK": [
-        "HDFCBANK.NS",
-        "ICICIBANK.NS",
-        "AXISBANK.NS",
-        "INDUSINDBK.NS",
-    ],
-    "HEALTHCARE": ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "APOLLOHOSP.NS"],
-    "CONSR DURBL": ["TITAN.NS", "HAVELLS.NS", "VOLTAS.NS", "ASIANPAINT.NS"],
-    "OIL & GAS": ["RELIANCE.NS", "ONGC.NS", "BPCL.NS", "IOC.NS"],
-    "INFRA": ["LT.NS", "ADANIPORTS.NS", "NTPC.NS", "POWERGRID.NS"],
-    "COMMODITIES": ["TATASTEEL.NS", "HINDALCO.NS", "JSWSTEEL.NS", "UPL.NS"],
-}
+selected_sector = st.sidebar.selectbox(
+    "Select Sector to Analyze", list(sector_stocks.keys())
+)
+current_stocks = sector_stocks[selected_sector]
 
 
 @st.cache_data(ttl=3600)
-def fetch_data(tf):
+def fetch_stock_data(tf, stocks_dict):
   period = "1y" if tf == "Daily" else "2y"
   interval = "1d" if tf == "Daily" else "1wk"
 
   data_dict = {}
 
+  # Download benchmark
   try:
     b_df = yf.download(
         benchmark, period=period, interval=interval, progress=False
@@ -85,7 +98,8 @@ def fetch_data(tf):
   except Exception:
     pass
 
-  for name, ticker in sectors.items():
+  # Download each stock individually
+  for name, ticker in stocks_dict.items():
     try:
       df = yf.download(
           ticker, period=period, interval=interval, progress=False
@@ -105,7 +119,7 @@ def fetch_data(tf):
 
 
 # Load Data
-data = fetch_data(timeframe)
+data = fetch_stock_data(timeframe, current_stocks)
 
 if benchmark not in data.columns:
   st.error(
@@ -115,11 +129,10 @@ if benchmark not in data.columns:
 else:
   bench_series = data[benchmark]
 
-  # Calculate RRG metrics
   ratio_df = pd.DataFrame(index=data.index)
   mom_df = pd.DataFrame(index=data.index)
 
-  for name in sectors.keys():
+  for name in current_stocks.keys():
     if name in data.columns:
       sec_series = data[name]
       rs = sec_series / bench_series
@@ -141,7 +154,7 @@ else:
     fig.add_hline(y=100, line_dash="dash", line_color="gray")
     fig.add_vline(x=100, line_dash="dash", line_color="gray")
 
-    # Add Quadrant Background Watermarks
+    # Background Watermark Labels
     fig.add_annotation(
         x=107,
         y=108,
@@ -189,7 +202,7 @@ else:
       )
 
     fig.update_layout(
-        title=f"Sector Rotation Graph — {timeframe} View",
+        title=f"{selected_sector} Stocks Rotation Graph — {timeframe} View",
         xaxis_title="RS-Ratio (Trend Strength)",
         yaxis_title="RS-Momentum",
         xaxis=dict(range=[90, 110]),
@@ -202,7 +215,7 @@ else:
 
     # --- QUADRANT CARDS BREAKDOWN SECTION ---
     st.markdown("---")
-    st.subheader("📊 Sector Quadrant Summary")
+    st.subheader(f"📊 {selected_sector} Stocks Quadrant Summary")
 
     latest_ratios = ratio_df.iloc[-1]
     latest_moms = mom_df.iloc[-1]
@@ -242,39 +255,3 @@ else:
       st.markdown("#### 🔴 Lagging")
       for s in lagging:
         st.markdown(f"- **{s}**")
-
-    # --- TOP STOCKS PER SECTOR SECTION ---
-    st.markdown("---")
-    st.subheader("🚀 Top Stocks by Sector")
-
-    # Let users pick a sector to view its top stocks
-    selected_sec_stocks = st.selectbox(
-        "Select a Sector to View Top Stocks:", list(sector_stocks.keys())
-    )
-
-    if selected_sec_stocks in sector_stocks:
-      tickers_list = sector_stocks[selected_sec_stocks]
-      st.write(
-          f"Showing top constituent stocks for **{selected_sec_stocks}**:"
-      )
-
-      stock_data = []
-      for t in tickers_list:
-        try:
-          stk = yf.Ticker(t)
-          hist = stk.history(period="5d")
-          if not hist.empty:
-            curr_price = hist["Close"].iloc[-1]
-            prev_price = hist["Close"].iloc[-2]
-            change_pct = ((curr_price - prev_price) / prev_price) * 100
-            stock_data.append({
-                "Stock": t.replace(".NS", ""),
-                "Price (₹)": round(curr_price, 2),
-                "Change (%)": round(change_pct, 2),
-            })
-        except Exception:
-          stock_data.append({"Stock": t.replace(".NS", ""), "Price (₹)": "N/A", "Change (%)": "N/A"})
-
-      if stock_data:
-        df_stocks = pd.DataFrame(stock_data)
-        st.dataframe(df_stocks, use_container_width=True, hide_index=True)

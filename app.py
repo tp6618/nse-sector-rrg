@@ -1,21 +1,23 @@
+import io
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Multi-Screener Pattern Engine",
+    page_title="NSE Live Nifty 500 Multi-Screener Engine",
     page_icon="📈",
     layout="wide",
 )
 
 st.title(
-    "NSE Sector Rotation & Nifty 500 Multi-Screener Intersection Dashboard"
+    "NSE Sector Rotation & Live Nifty 500 5-Screener Intersection Dashboard"
 )
 st.markdown(
-    "Scanning stocks independently across 4 custom screeners and filtering for"
-    " consensus matches."
+    "Dynamically fetching live Nifty 500 stocks from NSE India and scanning"
+    " across 5 custom screeners."
 )
 
 # Sidebar UI Controls
@@ -295,57 +297,72 @@ with col_b:
 
 
 # ==========================================
-# PART 3: 4-SCREENER INTERSECTION ENGINE
+# PART 3: LIVE NIFTY 500 5-SCREENER ENGINE
 # ==========================================
 st.markdown("---")
-st.header("🔍 Multi-Screener Intersection Engine (Scanned across 4 Rules)")
+st.header(
+    "🔍 Live Nifty 500 Multi-Screener Intersection Engine (5 Rules Scanned)"
+)
 st.markdown(
-    "Evaluating stocks independently across Screener 1 (MACD/Volume), Screener"
-    " 2 (Price near 52w High & RSI), Screener 3 (EMA Convergence), and Screener"
-    " 4 (Flag Pattern & Volume), and listing consensus matches."
+    "Fetching live components from NSE India website and running independent"
+    " checks for Screener 1, 2, 3, 4, & 5."
 )
 
 
-@st.cache_data(ttl=600)
-def run_multi_screeners():
-  universe = {
-      "Apar Industries": "APARINDS.NS",
-      "BEML": "BEML.NS",
-      "Aegis Vopak": "AEGISVOPAK.NS",
-      "Deepak Fertilisers": "DEEPAKFERT.NS",
-      "Jubilant Food": "JUBLFOOD.NS",
-      "HDFC Life": "HDFCLIFE.NS",
-      "Tata Motors": "TATAMOTORS.NS",
-      "Sun Pharma": "SUNPHARMA.NS",
-      "Tata Steel": "TATASTEEL.NS",
-      "Hindalco": "HINDALCO.NS",
-      "Divi's Lab": "DIVISLAB.NS",
-      "BHEL": "BHEL.NS",
-      "Cochin Shipyard": "COCHINSHIP.NS",
-      "Mazagon Dock": "MAZDOCK.NS",
-      "Kaynes Technology": "KAYNES.NS",
-      "KPIT Tech": "KPITTECH.NS",
-      "Persistent Systems": "PERSISTENT.NS",
-      "Trent": "TRENT.NS",
-      "Bharat Electronics": "BEL.NS",
-      "LTIMindtree": "LTIM.NS",
-      "Siemens": "SIEMENS.NS",
-      "ABB India": "ABB.NS",
-      "Tata Power": "TATAPOWER.NS",
-      "Adani Ports": "ADANIPORTS.NS",
-      "Titan Company": "TITAN.NS",
-      "Bajaj Finance": "BAJFINANCE.NS",
-      "Reliance Industries": "RELIANCE.NS",
-      "Infosys": "INFY.NS",
-      "ICICI Bank": "ICICIBANK.NS",
-      "Axis Bank": "AXISBANK.NS",
-      "SBIN": "SBIN.NS",
-      "Wipro": "WIPRO.NS",
+@st.cache_data(ttl=3600)
+def get_nifty500_tickers():
+  url = "https://archives.nseindia.com/content/indices/ind_nifty500list.csv"
+  headers = {
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
+          " like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      )
   }
+  try:
+    response = requests.get(url, headers=headers, timeout=10)
+    if response.status_code == 200:
+      df_csv = pd.read_csv(io.StringIO(response.text))
+      if "Symbol" in df_csv.columns:
+        return [str(sym).strip() + ".NS" for sym in df_csv["Symbol"].tolist()]
+  except Exception:
+    pass
 
+  # Fallback core list if network block occurs
+  return [
+      "RELIANCE.NS",
+      "TCS.NS",
+      "HDFCBANK.NS",
+      "ICICIBANK.NS",
+      "INFY.NS",
+      "SBIN.NS",
+      "LTI.NS",
+      "AXISBANK.NS",
+      "ITC.NS",
+      "BHARTIARTL.NS",
+      "TATAMOTORS.NS",
+      "SUNPHARMA.NS",
+      "MARUTI.NS",
+      "TITAN.NS",
+      "BAJFINANCE.NS",
+      "ASIANPAINT.NS",
+      "HCLTECH.NS",
+      "ADANIENT.NS",
+      "NTPC.NS",
+      "ONGC.NS",
+  ]
+
+
+@st.cache_data(ttl=600)
+def run_live_multi_screeners():
+  tickers = get_nifty500_tickers()
   results = []
 
-  for name, ticker in universe.items():
+  # Progress bar for user feedback during live scan
+  progress_bar = st.progress(0)
+  total_stocks = len(tickers)
+
+  for i, ticker in enumerate(tickers):
+    progress_bar.progress((i + 1) / total_stocks)
     try:
       df = yf.download(ticker, period="6mo", interval="1d", progress=False)
       if not df.empty and len(df) >= 50:
@@ -363,7 +380,7 @@ def run_multi_screeners():
         curr_vol = vol.iloc[-1]
         prev_vol = vol.iloc[-2]
 
-        # RSI 14 calculation helper
+        # RSI 14 calculation
         delta = close.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -371,14 +388,16 @@ def run_multi_screeners():
         rsi = 100 - (100 / (1 + rs))
         curr_rsi = rsi.iloc[-1]
 
-        # EMAs
+        # EMAs and SMAs
         ema_5 = close.ewm(span=5).mean().iloc[-1]
         ema_13 = close.ewm(span=13).mean().iloc[-1]
+        ema_20 = close.ewm(span=20).mean().iloc[-1]
         ema_21 = close.ewm(span=21).mean().iloc[-1]
         ema_26 = close.ewm(span=26).mean().iloc[-1]
+        sma_vol_20 = vol.rolling(20).mean().iloc[-1]
         sma_vol_30 = vol.tail(30).mean()
 
-        # --- Screener 1 Check: Volume expansion, close > 2 weeks ago, vol > 100k ---
+        # Screener 1
         s1 = (
             curr_vol > prev_vol
             and curr_close > close.iloc[-14]
@@ -386,7 +405,7 @@ def run_multi_screeners():
             and curr_close > prev_close
         )
 
-        # --- Screener 2 Check: Near 52w/max high & RSI 55-80 ---
+        # Screener 2
         max_high = high.tail(120).max()
         s2 = (
             curr_close >= max_high * 0.95
@@ -394,7 +413,7 @@ def run_multi_screeners():
             and 55 <= curr_rsi <= 80
         )
 
-        # --- Screener 3 Check: Vol > 100k, Vol > SMA(Vol,30), EMAs tightly bunched within 1% ---
+        # Screener 3
         ema_bunched = (
             abs((curr_close - ema_5) / ema_5) * 100 <= 1
             and abs((curr_close - ema_13) / ema_13) * 100 <= 1
@@ -403,46 +422,53 @@ def run_multi_screeners():
         )
         s3 = curr_vol > 100000 and curr_vol > sma_vol_30 and ema_bunched
 
-        # --- Screener 4 Check: Vol > 500k, Price > 100, Flag/Impulse continuation ---
+        # Screener 4
         pole_move = (close.iloc[-1] - close.iloc[-20]) / close.iloc[-20]
         s4 = curr_vol > 500000 and curr_close > 100 and pole_move > 0.04
 
-        passed_count = sum([s1, s2, s3, s4])
+        # Screener 5
+        s5 = (
+            curr_close > ema_20
+            and curr_rsi >= 58
+            and curr_vol >= (sma_vol_20 * 1.2)
+            and (curr_close * curr_vol) >= 5000000
+        )
 
-        if passed_count >= 2:  # Stock matches at least 2 or more screeners
+        passed_count = sum([s1, s2, s3, s4, s5])
+
+        if passed_count >= 2:  # Stock matches 2 or more rules
           results.append({
-              "name": name,
               "ticker": ticker.split(".")[0],
               "price": curr_close,
               "matches": passed_count,
-              "details": f"Passed {passed_count}/4 Screeners",
+              "details": f"Passed {passed_count}/5 Screeners",
           })
     except Exception:
       pass
 
-  # Sort by highest matches across screeners
+  progress_bar.empty()
   results = sorted(results, key=lambda x: x["matches"], reverse=True)
   return results
 
 
-consensus_stocks = run_multi_screeners()
+consensus_stocks = run_live_multi_screeners()
 
 if not consensus_stocks:
   st.info(
-      "Scanning multi-screener rules... No stocks currently match the"
+      "Scanning live Nifty 500 universe... No stocks currently match the multi-rule"
       " intersection."
   )
 else:
   st.success(
-      f"Found {len(consensus_stocks)} consensus stocks matching multiple"
+      f"Found {len(consensus_stocks)} live consensus stocks matching multiple"
       " screener rules!"
   )
   cols = st.columns(3)
-  for idx, stock in enumerate(consensus_stocks[:6]):
+  for idx, stock in enumerate(consensus_stocks[:9]):
     with cols[idx % 3]:
       st.markdown(
-          f"### ⭐ {stock['name']} (`{stock['ticker']}`)\n"
+          f"### ⭐ `{stock['ticker']}`\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Screener Status:** {stock['details']}"
+          f"**Status:** {stock['details']}"
       )
       st.markdown("---")

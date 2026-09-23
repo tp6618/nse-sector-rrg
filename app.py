@@ -9,15 +9,12 @@ st.set_page_config(
 )
 
 st.title("NSE Sector & Stock Rotation (RRG) Dashboard")
-st.markdown(
-    "Relative Rotation Graph tracking sectors and constituent stocks."
-)
+st.markdown("Relative Rotation Graph tracking sectors and constituent stocks.")
 
 # Sidebar UI Controls
 st.sidebar.header("Configuration")
 timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
 
-# View Mode Dropdown (All Sectors or Individual Sector Stocks)
 view_mode = st.sidebar.selectbox(
     "Select View Mode",
     [
@@ -33,9 +30,9 @@ view_mode = st.sidebar.selectbox(
 
 tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-# Define Benchmarks and Ticker Dictionaries based on selection
+# Define Benchmarks and Ticker Dictionaries
 if view_mode == "All Sectors":
-  benchmark = "^NSEI"  # Nifty 50
+  benchmark = "^NSEI"
   tickers_dict = {
       "AUTO": "^CNXAUTO",
       "BANK": "^NSEBANK",
@@ -128,8 +125,6 @@ def fetch_data(tf, bench, items):
   interval = "1d" if tf == "Daily" else "1wk"
 
   data_dict = {}
-
-  # Download benchmark
   try:
     b_df = yf.download(bench, period=period, interval=interval, progress=False)
     if not b_df.empty:
@@ -140,7 +135,6 @@ def fetch_data(tf, bench, items):
   except Exception:
     pass
 
-  # Download each component individually
   for name, ticker in items.items():
     try:
       df = yf.download(
@@ -296,3 +290,27 @@ else:
       st.markdown("#### 🔴 Lagging")
       for s in lagging:
         st.markdown(f"- **{s}**")
+
+    # --- SEPARATE PARTITION: DETAILED STOCKS / ITEMS TABLE ---
+    st.markdown("---")
+    st.subheader(f"📋 Detailed Breakdown Table ({view_mode})")
+
+    summary_data = []
+    for name in ratio_df.columns:
+      r = latest_ratios[name]
+      m = latest_moms[name]
+      if r >= 100 and m >= 100:
+        quad = "Leading"
+      elif r >= 100 and m < 100:
+        quad = "Weakening"
+      elif r < 100 and m < 100:
+        quad = "Lagging"
+      else:
+        quad = "Improving"
+
+      summary_data.append(
+          {"Name": name, "RS-Ratio (X)": round(r, 2), "RS-Momentum (Y)": round(m, 2), "Quadrant": quad}
+      )
+
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True)

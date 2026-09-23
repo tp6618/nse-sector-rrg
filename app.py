@@ -7,17 +7,18 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="NSE Live Nifty 500 Multi-Screener Engine",
+    page_title="Advanced Live Nifty 500 Multi-Screener Engine",
     page_icon="📈",
     layout="wide",
 )
 
 st.title(
-    "NSE Sector Rotation & Live Nifty 500 5-Screener Intersection Dashboard"
+    "NSE Sector Rotation & Nifty 500 Advanced Multi-Screener Intersection"
+    " Dashboard"
 )
 st.markdown(
-    "Dynamically fetching live Nifty 500 stocks from NSE India and scanning"
-    " across 5 custom screeners."
+    "Dynamically scanning live Nifty 500 stocks across 5 custom screeners with"
+    " built-in Relative Strength, Volume Dry-up, and ADTV Liquidity filters."
 )
 
 # Sidebar UI Controls
@@ -297,15 +298,17 @@ with col_b:
 
 
 # ==========================================
-# PART 3: LIVE NIFTY 500 5-SCREENER ENGINE
+# PART 3: ADVANCED LIVE NIFTY 500 MULTI-SCREENER
 # ==========================================
 st.markdown("---")
 st.header(
-    "🔍 Live Nifty 500 Multi-Screener Intersection Engine (5 Rules Scanned)"
+    "🔍 Advanced Live Nifty 500 Multi-Screener Engine (5 Rules + RS + Volume"
+    " Dry-up)"
 )
 st.markdown(
-    "Fetching live components from NSE India website and running independent"
-    " checks for Screener 1, 2, 3, 4, & 5."
+    "Fetching live Nifty 500 components from NSE India, applying institutional"
+    " ADTV liquidity filters, Relative Strength vs Nifty, and evaluating 5"
+    " custom screeners."
 )
 
 
@@ -327,7 +330,6 @@ def get_nifty500_tickers():
   except Exception:
     pass
 
-  # Fallback core list if network block occurs
   return [
       "RELIANCE.NS",
       "TCS.NS",
@@ -335,7 +337,6 @@ def get_nifty500_tickers():
       "ICICIBANK.NS",
       "INFY.NS",
       "SBIN.NS",
-      "LTI.NS",
       "AXISBANK.NS",
       "ITC.NS",
       "BHARTIARTL.NS",
@@ -353,11 +354,25 @@ def get_nifty500_tickers():
 
 
 @st.cache_data(ttl=600)
-def run_live_multi_screeners():
+def run_advanced_multi_screeners():
   tickers = get_nifty500_tickers()
   results = []
 
-  # Progress bar for user feedback during live scan
+  # Download Nifty 50 benchmark series for Relative Strength comparative calculation
+  nifty_df = yf.download(
+      "^NSEI", period="6mo", interval="1d", progress=False
+  )
+  nifty_close = (
+      nifty_df[("Close", "^NSEI")]
+      if isinstance(nifty_df.columns, pd.MultiIndex)
+      else nifty_df["Close"]
+  )
+  nifty_return_60d = (
+      (nifty_close.iloc[-1] - nifty_close.iloc[-60]) / nifty_close.iloc[-60]
+      if len(nifty_close) >= 60
+      else 0
+  )
+
   progress_bar = st.progress(0)
   total_stocks = len(tickers)
 
@@ -365,7 +380,7 @@ def run_live_multi_screeners():
     progress_bar.progress((i + 1) / total_stocks)
     try:
       df = yf.download(ticker, period="6mo", interval="1d", progress=False)
-      if not df.empty and len(df) >= 50:
+      if not df.empty and len(df) >= 60:
         if isinstance(df.columns, pd.MultiIndex):
           close = df[("Close", ticker)]
           vol = df[("Volume", ticker)]
@@ -379,6 +394,27 @@ def run_live_multi_screeners():
         prev_close = close.iloc[-2]
         curr_vol = vol.iloc[-1]
         prev_vol = vol.iloc[-2]
+
+        # 1. Strict Liquidity (ADTV) Filter: TurnOver >= 1 Crore (10,000,000 INR)
+        adtv = (close * vol).tail(20).mean()
+        if adtv < 10000000:
+          continue
+
+        # 2. Relative Strength (RS) Filter: Stock 60-day return must beat Nifty benchmark return
+        stock_return_60d = (
+            (curr_close - close.iloc[-60]) / close.iloc[-60]
+        )
+        if stock_return_60d < nifty_return_60d:
+          continue
+
+        # 3. Volume Dry-up Check: Prior to breakout, volume contracted below 20-day SMA recently
+        vol_sma_20 = vol.rolling(20).mean()
+        volume_dry_up = (
+            vol.iloc[-2] < vol_sma_20.iloc[-2]
+            or vol.iloc[-3] < vol_sma_20.iloc[-3]
+        )
+        if not volume_dry_up:
+          continue
 
         # RSI 14 calculation
         delta = close.diff()
@@ -394,10 +430,9 @@ def run_live_multi_screeners():
         ema_20 = close.ewm(span=20).mean().iloc[-1]
         ema_21 = close.ewm(span=21).mean().iloc[-1]
         ema_26 = close.ewm(span=26).mean().iloc[-1]
-        sma_vol_20 = vol.rolling(20).mean().iloc[-1]
         sma_vol_30 = vol.tail(30).mean()
 
-        # Screener 1
+        # Screener 1 Check
         s1 = (
             curr_vol > prev_vol
             and curr_close > close.iloc[-14]
@@ -405,7 +440,7 @@ def run_live_multi_screeners():
             and curr_close > prev_close
         )
 
-        # Screener 2
+        # Screener 2 Check
         max_high = high.tail(120).max()
         s2 = (
             curr_close >= max_high * 0.95
@@ -413,7 +448,7 @@ def run_live_multi_screeners():
             and 55 <= curr_rsi <= 80
         )
 
-        # Screener 3
+        # Screener 3 Check
         ema_bunched = (
             abs((curr_close - ema_5) / ema_5) * 100 <= 1
             and abs((curr_close - ema_13) / ema_13) * 100 <= 1
@@ -422,46 +457,60 @@ def run_live_multi_screeners():
         )
         s3 = curr_vol > 100000 and curr_vol > sma_vol_30 and ema_bunched
 
-        # Screener 4
+        # Screener 4 Check
         pole_move = (close.iloc[-1] - close.iloc[-20]) / close.iloc[-20]
         s4 = curr_vol > 500000 and curr_close > 100 and pole_move > 0.04
 
-        # Screener 5
+        # Screener 5 Check
         s5 = (
             curr_close > ema_20
             and curr_rsi >= 58
-            and curr_vol >= (sma_vol_20 * 1.2)
+            and curr_vol >= (vol_sma_20.iloc[-1] * 1.2)
             and (curr_close * curr_vol) >= 5000000
         )
 
         passed_count = sum([s1, s2, s3, s4, s5])
 
-        if passed_count >= 2:  # Stock matches 2 or more rules
+        if passed_count >= 2:  # Matches at least 2 or more rules
+          # Composite Momentum Score calculation for ranking
+          vol_multiple = (
+              curr_vol / vol_sma_20.iloc[-1]
+              if vol_sma_20.iloc[-1] > 0
+              else 1.0
+          )
+          composite_score = (
+              passed_count * 20
+              + (stock_return_60d * 10)
+              + (vol_multiple * 5)
+          )
+
           results.append({
               "ticker": ticker.split(".")[0],
               "price": curr_close,
               "matches": passed_count,
               "details": f"Passed {passed_count}/5 Screeners",
+              "score": composite_score,
           })
     except Exception:
       pass
 
   progress_bar.empty()
-  results = sorted(results, key=lambda x: x["matches"], reverse=True)
+  # Sort strictly by highest composite momentum score and rule matches
+  results = sorted(results, key=lambda x: x["score"], reverse=True)
   return results
 
 
-consensus_stocks = run_live_multi_screeners()
+consensus_stocks = run_advanced_multi_screeners()
 
 if not consensus_stocks:
   st.info(
-      "Scanning live Nifty 500 universe... No stocks currently match the multi-rule"
-      " intersection."
+      "Scanning live Nifty 500 universe with RS & Volume constraints... No"
+      " stocks currently match the intersection."
   )
 else:
   st.success(
-      f"Found {len(consensus_stocks)} live consensus stocks matching multiple"
-      " screener rules!"
+      f"Found {len(consensus_stocks)} high-conviction institutional consensus"
+      " stocks!"
   )
   cols = st.columns(3)
   for idx, stock in enumerate(consensus_stocks[:9]):

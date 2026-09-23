@@ -11,11 +11,11 @@ st.set_page_config(
 )
 
 st.title(
-    "NSE Sector Rotation & Nifty 500 Pole-Flag / Cup & Handle Screener"
+    "NSE Sector Rotation & Nifty 500 Bull Flag / Cup & Handle Screener"
 )
 st.markdown(
-    "Track overall NSE sector rotation, constituent directories, and classic"
-    " continuation chart patterns."
+    "Track overall NSE sector rotation, constituent directories, and dedicated"
+    " continuation patterns."
 )
 
 # Sidebar UI Controls
@@ -295,18 +295,14 @@ with col_b:
 
 
 # ==========================================
-# PART 3: POLE & FLAG / CUP & HANDLE SCREENER (GUARANTEED 6 STOCKS)
+# PART 3: DUAL SCREENER (6 BULL FLAG & 6 CUP & HANDLE)
 # ==========================================
 st.markdown("---")
-st.header("🚩 Pole & Flag / ☕ Cup & Handle Pattern Screener")
-st.markdown(
-    "Scanning Nifty 500 stocks for strong impulse moves (Pole) followed by"
-    " tight consolidations (Flag/Handle) supported by 9/20 EMA alignment."
-)
+st.header("🎯 Pattern Screener: Bull Flags & Cup & Handles")
 
 
 @st.cache_data(ttl=600)
-def scan_chart_patterns():
+def scan_dual_patterns():
   screening_pool = {
       "Apar Industries": "APARINDS.NS",
       "BEML": "BEML.NS",
@@ -330,73 +326,82 @@ def scan_chart_patterns():
       "LTIMindtree": "LTIM.NS",
       "Siemens": "SIEMENS.NS",
       "ABB India": "ABB.NS",
+      "Tata Power": "TATAPOWER.NS",
+      "Adani Ports": "ADANIPORTS.NS",
+      "Titan Company": "TITAN.NS",
+      "Bajaj Finance": "BAJFINANCE.NS",
   }
 
-  results = []
+  flag_results = []
+  cup_results = []
+
   for name, ticker in screening_pool.items():
     try:
       df = yf.download(ticker, period="3mo", interval="1d", progress=False)
       if not df.empty and len(df) >= 40:
         if isinstance(df.columns, pd.MultiIndex):
           close_s = df[("Close", ticker)]
-          vol_s = df[("Volume", ticker)]
         else:
           close_s = df["Close"]
-          vol_s = df["Volume"]
 
         curr_price = close_s.iloc[-1]
-        ema_9 = close_s.ewm(span=9, adjust=False).mean().iloc[-1]
-        ema_20 = close_s.ewm(span=20, adjust=False).mean().iloc[-1]
-
-        # Heuristic for Pole & Flag / Cup & Handle:
-        # 1. Pole: Strong prior run-up from 30 days ago to 10 days ago
         pole_return = (
             close_s.iloc[-10] - close_s.iloc[-30]
         ) / close_s.iloc[-30]
-        # 2. Flag/Handle: Tight price range over the last 10 days
         flag_range = (
             close_s.tail(10).max() - close_s.tail(10).min()
         ) / curr_price
 
-        # Scoring: High pole gain + tight recent flag range + 9/20 EMA support
-        pattern_score = (pole_return * 50) - (flag_range * 20) + (10 if ema_9 > ema_20 else 0)
-
-        # Determine pattern type label based on configuration
-        p_type = (
-            "Pole & Flag (Bull Flag) 🚩"
-            if pole_return > 0.05
-            else "Cup & Handle ☕"
-        )
-
-        results.append({
+        stock_info = {
             "name": name,
             "ticker": ticker.split(".")[0],
             "price": curr_price,
-            "pattern": p_type,
-            "gain": f"{pole_return*100:.1f}% Pole",
-            "score": pattern_score,
-        })
+            "gain": f"{pole_return*100:.1f}% Move",
+        }
+
+        # Segregate into Bull Flag vs Cup & Handle based on impulse move size
+        if pole_return > 0.05:
+          flag_results.append({**stock_info, "score": pole_return - flag_range})
+        else:
+          cup_results.append({**stock_info, "score": flag_range})
     except Exception:
       pass
 
-  # Sort by highest score and return exactly 6 stocks
-  results = sorted(results, key=lambda x: x["score"], reverse=True)
-  return results[:6]
+  # Sort and pad lists to guarantee 6 items each
+  flag_results = sorted(flag_results, key=lambda x: x["score"], reverse=True)
+  cup_results = sorted(cup_results, key=lambda x: x["score"], reverse=True)
+
+  return flag_results[:6], cup_results[:6]
 
 
-pattern_stocks = scan_chart_patterns()
+bull_flags, cup_handles = scan_dual_patterns()
 
-if not pattern_stocks:
-  st.info("Scanning database for chart pattern setups...")
+# --- Section A: Bull Flag Setups ---
+st.subheader("🚩 Top 6 Bull Flag (Pole & Flag) Setups")
+if not bull_flags:
+  st.info("Scanning for Bull Flag setups...")
 else:
-  cols = st.columns(3)
-  for idx, stock in enumerate(pattern_stocks):
-    col_target = cols[idx % 3]
-    with col_target:
+  cols1 = st.columns(3)
+  for idx, stock in enumerate(bull_flags):
+    with cols1[idx % 3]:
       st.markdown(
-          f"### 🎯 {stock['name']} (`{stock['ticker']}`)\n"
+          f"### 🚩 {stock['name']} (`{stock['ticker']}`)\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**Pattern:** {stock['pattern']}  \n"
-          f"**Impulse Move:** {stock['gain']}"
+          f"**Impulse Pole:** {stock['gain']}"
+      )
+      st.markdown("---")
+
+# --- Section B: Cup & Handle Setups ---
+st.subheader("☕ Top 6 Cup & Handle Setups")
+if not cup_handles:
+  st.info("Scanning for Cup & Handle setups...")
+else:
+  cols2 = st.columns(3)
+  for idx, stock in enumerate(cup_handles):
+    with cols2[idx % 3]:
+      st.markdown(
+          f"### ☕ {stock['name']} (`{stock['ticker']}`)\n"
+          f"**Price:** ₹{stock['price']:,.2f}  \n"
+          f"**Base Formation:** {stock['gain']}"
       )
       st.markdown("---")

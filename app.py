@@ -1,5 +1,3 @@
-import urllib.request
-import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -295,58 +293,61 @@ with col_b:
 
 
 # ==========================================
-# PART 3: NEWS STOCKS (REAL-TIME FEED)
+# PART 3: NEWS STOCKS (REAL-TIME YFINANCE FEED)
 # ==========================================
 st.markdown("---")
-st.header("📰 NEWS Stocks (Nifty 500 Real-Time Feed)")
+st.header("📰 NEWS Stocks (Real-Time Market Feed)")
 st.markdown(
-    "Real-time news updates and headlines regarding Nifty 500 and NSE"
-    " constituent stocks."
+    "Real-time market headlines and stock news fetched directly via live"
+    " feeds."
 )
 
 
-@st.cache_data(ttl=600)  # Refresh news cache every 10 minutes
-def fetch_realtime_news():
-  news_items = []
+@st.cache_data(ttl=600)
+def fetch_yf_news():
+  news_list = []
   try:
-    # Google News RSS feed for Nifty 500 / NSE stocks
-    rss_url = "https://news.google.com/rss/search?q=NSE+Nifty+500+stocks+news&hl=en-IN&gl=IN&ceid=IN:en"
-    req = urllib.request.Request(
-        rss_url, headers={"User-Agent": "Mozilla/5.0"}
-    )
-    with urllib.request.urlopen(req) as response:
-      xml_data = response.read()
-      root = ET.fromstring(xml_data)
-      channel = root.find("channel")
-      if channel is not None:
-        for item in channel.findall("item")[:15]:  # Top 15 news items
-          title = item.find("title")
-          link = item.find("link")
-          pub_date = item.find("pubDate")
+    # Pull news directly from Nifty 50 and major market tickers
+    tickers_to_check = ["^NSEI", "RELIANCE.NS", "TCS.NS", "INFY.NS", "SBIN.NS"]
+    for t_sym in tickers_to_check:
+      t_obj = yf.Ticker(t_sym)
+      if hasattr(t_obj, "news") and t_obj.news:
+        for item in t_obj.news:
+          # Handle different yfinance news JSON structures securely
+          if "content" in item:
+            title = item["content"].get("title", "")
+            provider = item["content"].get("provider", {}).get("displayName", "")
+            click_url = item["content"].get("clickThroughUrl", {}).get("url", "#")
+            pub_time = item["content"].get("pubDate", "")
+          else:
+            title = item.get("title", "")
+            provider = item.get("publisher", "")
+            click_url = item.get("link", "#")
+            pub_time = item.get("providerPublishTime", "")
 
-          title_text = title.text if title is not None else "No Title"
-          link_text = link.text if link is not None else "#"
-          date_text = pubDate.text if pubDate is not None else ""
-
-          news_items.append(
-              {"title": title_text, "link": link_text, "date": date_text}
-          )
+          if title and title not in [n["title"] for n in news_list]:
+            news_list.append(
+                {
+                    "title": title,
+                    "publisher": provider,
+                    "link": click_url,
+                    "time": str(pub_time),
+                }
+            )
   except Exception as e:
-    print(f"Error fetching news: {e}")
-  return news_items
+    print(f"News fetch error: {e}")
+  return news_list[:15]  # Return top 15 unique headlines
 
 
-live_news = fetch_realtime_news()
+live_news = fetch_yf_news()
 
 if not live_news:
-  st.info(
-      "Live news feed currently unavailable. Please check back shortly or verify"
-      " network connection."
-  )
+  st.info("No recent news headlines available at the moment.")
 else:
   for idx, news in enumerate(live_news):
     with st.container():
-      st.markdown(f"**{idx+1}. [{news['title']}]({news['link']})**")
-      if news["date"]:
-        st.caption(f"Published: {news['date']}")
+      publisher_tag = f" *({news['publisher']})*" if news["publisher"] else ""
+      st.markdown(
+          f"**{idx+1}. [{news['title']}]({news['link']}){publisher_tag}**"
+      )
       st.markdown("---")

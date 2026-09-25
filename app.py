@@ -394,7 +394,9 @@ def run_dual_screeners():
         high_ref = high.max()
         pct_below_high = (high_ref - curr_close) / high_ref
 
-        is_near_highs = pct_below_high <= 0.10
+        # Partition 1 updated to 2-10% below peak
+        is_near_highs = 0.02 <= pct_below_high <= 0.10
+        # Partition 2 remains 7-12% pullback zone
         is_pullback_zone = 0.07 <= pct_below_high <= 0.12
 
         if not (is_near_highs or is_pullback_zone):
@@ -509,21 +511,22 @@ def run_dual_screeners():
 
 near_highs, pullbacks = run_dual_screeners()
 
-# --- Partition 1: Near 52W Highs (0-10%) ---
+# --- Partition 1: Near Highs (2-10%) ---
 st.subheader(
-    "📈 Partition 1: Auto-Updating Screener (Near 52W Highs: 0-10% below peak)"
+    "📈 Partition 1: Auto-Updating Screener (Near Highs: 2-10% below peak)"
 )
 if not near_highs:
-  st.info("No stocks currently match the Near Highs intersection criteria.")
+  st.info("No stocks currently match the 2-10% Near Highs criteria.")
 else:
-  st.success(f"Found {len(near_highs)} stocks testing near 52W highs!")
+  st.success(f"Found {len(near_highs)} stocks in the 2-10% near-highs zone!")
   cols1 = st.columns(3)
   for idx, stock in enumerate(near_highs[:9]):
     with cols1[idx % 3]:
       st.markdown(
           f"### ⭐ `{stock['ticker']}`\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**52W High:** ₹{stock['high_ref']:,.2f}  \n"
+          f"**High Ref:** ₹{stock['high_ref']:,.2f}  \n"
+          f"**Distance:** {stock['pullback_pct']} below High  \n"
           f"**Status:** {stock['details']}"
       )
       st.markdown("---")
@@ -583,20 +586,14 @@ def fetch_most_active_intraday():
         curr_close = close.iloc[-1]
         prev_close = close.iloc[-2]
         curr_vol = vol.iloc[-1]
-        curr_open = open_p.iloc[-1]
 
-        # Calculate Traded Turnover in INR (Close * Volume)
         turnover_inr = curr_close * curr_vol
         turnover_crores = turnover_inr / 10000000
 
-        # Filter for minimum institutional turnover (>= ₹20 Crores)
         if turnover_crores < 20:
           continue
 
-        # Intraday Change Percentage
         day_change_pct = ((curr_close - prev_close) / prev_close) * 100
-
-        # Recommended Intraday Stop Loss Reference (using previous low / buffer)
         stop_loss_ref = low.iloc[-1] * 0.995
 
         active_records.append({
@@ -609,12 +606,10 @@ def fetch_most_active_intraday():
     except Exception:
       pass
 
-  # Sort by highest turnover
   active_records = sorted(
       active_records, key=lambda x: x["turnover_cr"], reverse=True
   )
 
-  # Separate into Top Gainers and Losers
   gainers = sorted(
       [r for r in active_records if r["change_pct"] > 0],
       key=lambda x: x["change_pct"],

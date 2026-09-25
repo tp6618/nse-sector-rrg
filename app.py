@@ -8,16 +8,18 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="Dual-Partition Live Nifty 500 Multi-Screener",
+    page_title="Advanced NSE Multi-Screener & Intraday Engine",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("NSE Sector Rotation & Dual-Partition Live Nifty 500 Screener")
+st.title(
+    "NSE Sector Rotation, Dual-Partition Screener & Intraday Active Equities"
+)
 st.markdown(
-    "Automatically fetches live Nifty 500 components from NSE India and scans"
-    " across 5 custom screeners for both near-highs (0-10%) and pullback (7-12%)"
-    " setups."
+    "Automatically fetches live Nifty 500 components from NSE India, evaluates"
+    " dual-partition swing setups, and scans high-turnover intraday equities"
+    " with risk guardrails."
 )
 
 # Sidebar UI Controls
@@ -392,19 +394,16 @@ def run_dual_screeners():
         high_ref = high.max()
         pct_below_high = (high_ref - curr_close) / high_ref
 
-        # Check which partition zone this stock falls into
         is_near_highs = pct_below_high <= 0.10
         is_pullback_zone = 0.07 <= pct_below_high <= 0.12
 
         if not (is_near_highs or is_pullback_zone):
           continue
 
-        # ADTV Liquidity Filter (>= 1 Crore INR)
         adtv = (close * vol).tail(20).mean()
         if adtv < 10000000:
           continue
 
-        # Relative Strength Filter
         stock_return_60d = (
             (curr_close - close.iloc[-60]) / close.iloc[-60]
             if len(close) >= 60
@@ -413,7 +412,6 @@ def run_dual_screeners():
         if stock_return_60d < nifty_return_60d:
           continue
 
-        # Volume Dry-up Check
         vol_sma_20 = vol.rolling(20).mean()
         volume_dry_up = (
             vol.iloc[-2] < vol_sma_20.iloc[-2]
@@ -422,7 +420,6 @@ def run_dual_screeners():
         if not volume_dry_up:
           continue
 
-        # RSI 14
         delta = close.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -430,7 +427,6 @@ def run_dual_screeners():
         rsi = 100 - (100 / (1 + rs))
         curr_rsi = rsi.iloc[-1]
 
-        # EMAs and SMAs
         ema_5 = close.ewm(span=5).mean().iloc[-1]
         ema_13 = close.ewm(span=13).mean().iloc[-1]
         ema_20 = close.ewm(span=20).mean().iloc[-1]
@@ -438,7 +434,6 @@ def run_dual_screeners():
         ema_26 = close.ewm(span=26).mean().iloc[-1]
         sma_vol_30 = vol.tail(30).mean()
 
-        # 5 Custom Screeners
         s1 = (
             curr_vol > prev_vol
             and curr_close > close.iloc[-14]
@@ -550,5 +545,116 @@ else:
           f"**High Ref:** ₹{stock['high_ref']:,.2f}  \n"
           f"**Pullback Depth:** {stock['pullback_pct']} below High  \n"
           f"**Status:** {stock['details']}"
+      )
+      st.markdown("---")
+
+
+# ==========================================
+# PART 4: MOST ACTIVE INTRADAY EQUITIES & RISK GUARDRAILS
+# ==========================================
+st.markdown("---")
+st.header("⚡ Most Active Intraday Equities & Risk Guardrails")
+st.markdown(
+    "Scanning institutional volume leaders with a minimum **₹20 Crore Daily"
+    " Turnover** filter and calculating intraday stop-loss reference zones."
+)
+
+
+@st.cache_data(ttl=300)
+def fetch_most_active_intraday():
+  tickers = get_nifty500_tickers()
+  active_records = []
+
+  for ticker in tickers:
+    try:
+      df = yf.download(ticker, period="5d", interval="1d", progress=False)
+      if not df.empty and len(df) >= 2:
+        if isinstance(df.columns, pd.MultiIndex):
+          close = df[("Close", ticker)]
+          open_p = df[("Open", ticker)]
+          vol = df[("Volume", ticker)]
+          low = df[("Low", ticker)]
+        else:
+          close = df["Close"]
+          open_p = df["Open"]
+          vol = df["Volume"]
+          low = df["Low"]
+
+        curr_close = close.iloc[-1]
+        prev_close = close.iloc[-2]
+        curr_vol = vol.iloc[-1]
+        curr_open = open_p.iloc[-1]
+
+        # Calculate Traded Turnover in INR (Close * Volume)
+        turnover_inr = curr_close * curr_vol
+        turnover_crores = turnover_inr / 10000000
+
+        # Filter for minimum institutional turnover (>= ₹20 Crores)
+        if turnover_crores < 20:
+          continue
+
+        # Intraday Change Percentage
+        day_change_pct = ((curr_close - prev_close) / prev_close) * 100
+
+        # Recommended Intraday Stop Loss Reference (using previous low / buffer)
+        stop_loss_ref = low.iloc[-1] * 0.995
+
+        active_records.append({
+            "ticker": ticker.split(".")[0],
+            "price": curr_close,
+            "change_pct": day_change_pct,
+            "turnover_cr": turnover_crores,
+            "stop_loss": stop_loss_ref,
+        })
+    except Exception:
+      pass
+
+  # Sort by highest turnover
+  active_records = sorted(
+      active_records, key=lambda x: x["turnover_cr"], reverse=True
+  )
+
+  # Separate into Top Gainers and Losers
+  gainers = sorted(
+      [r for r in active_records if r["change_pct"] > 0],
+      key=lambda x: x["change_pct"],
+      reverse=True,
+  )
+  losers = sorted(
+      [r for r in active_records if r["change_pct"] < 0],
+      key=lambda x: x["change_pct"],
+  )
+  return gainers[:5], losers[:5]
+
+
+intraday_gainers, intraday_losers = fetch_most_active_intraday()
+
+col_g, col_l = st.columns(2)
+
+with col_g:
+  st.subheader("🟢 Top Bullish Active Equities (Long Setups)")
+  if not intraday_gainers:
+    st.info("No bullish active equities meeting turnover criteria.")
+  else:
+    for stock in intraday_gainers:
+      st.markdown(
+          f"### 🚀 `{stock['ticker']}` (+{stock['change_pct']:.2f}%)\n"
+          f"**LTP:** ₹{stock['price']:,.2f} | **Turnover:** ₹"
+          f"{stock['turnover_cr']:,.1f} Cr  \n"
+          f"🛡️ **Rec. Intraday Stop-Loss:** ₹{stock['stop_loss']:,.2f}"
+      )
+      st.markdown("---")
+
+with col_l:
+  st.subheader("🔴 Top Bearish Active Equities (Short Setups)")
+  if not intraday_losers:
+    st.info("No bearish active equities meeting turnover criteria.")
+  else:
+    for stock in intraday_losers:
+      st.markdown(
+          f"### 🔻 `{stock['ticker']}` ({stock['change_pct']:.2f}%)\n"
+          f"**LTP:** ₹{stock['price']:,.2f} | **Turnover:** ₹"
+          f"{stock['turnover_cr']:,.1f} Cr  \n"
+          f"🛡️ **Rec. Intraday Stop-Loss:** ₹{stock['stop_loss']:,.2f}"
       )
       st.markdown("---")

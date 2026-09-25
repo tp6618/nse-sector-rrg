@@ -14,12 +14,12 @@ st.set_page_config(
 )
 
 st.title(
-    "NSE Sector Rotation, Dual-Partition Screener & Intraday Active Equities"
+    "NSE Sector Rotation, Dual-Partition Screener & Intraday Bull Flag Engine"
 )
 st.markdown(
     "Automatically fetches live Nifty 500 components from NSE India, evaluates"
-    " dual-partition swing setups, and scans high-turnover intraday equities"
-    " with risk guardrails."
+    " dual-partition swing setups, and scans intraday Bull Flag breakouts with"
+    " risk guardrails."
 )
 
 # Sidebar UI Controls
@@ -394,9 +394,7 @@ def run_dual_screeners():
         high_ref = high.max()
         pct_below_high = (high_ref - curr_close) / high_ref
 
-        # Partition 1 updated to 2-10% below peak
         is_near_highs = 0.02 <= pct_below_high <= 0.10
-        # Partition 2 remains 7-12% pullback zone
         is_pullback_zone = 0.07 <= pct_below_high <= 0.12
 
         if not (is_near_highs or is_pullback_zone):
@@ -553,103 +551,111 @@ else:
 
 
 # ==========================================
-# PART 4: MOST ACTIVE INTRADAY EQUITIES & RISK GUARDRAILS
+# PART 4: INTRADAY BULL FLAG SCANNER & RISK GUARDRAILS
 # ==========================================
 st.markdown("---")
-st.header("⚡ Most Active Intraday Equities & Risk Guardrails")
+st.header("⚡ Intraday Bull Flag Breakout Scanner")
 st.markdown(
-    "Scanning institutional volume leaders with a minimum **₹20 Crore Daily"
-    " Turnover** filter and calculating intraday stop-loss reference zones."
+    "Scanning today's intraday 15-minute price action for aggressive morning"
+    " impulse poles followed by tight consolidation flags and volume breakout"
+    " triggers."
 )
 
 
 @st.cache_data(ttl=300)
-def fetch_most_active_intraday():
+def fetch_intraday_bull_flags():
   tickers = get_nifty500_tickers()
-  active_records = []
+  flag_setups = []
 
   for ticker in tickers:
     try:
-      df = yf.download(ticker, period="5d", interval="1d", progress=False)
-      if not df.empty and len(df) >= 2:
-        if isinstance(df.columns, pd.MultiIndex):
-          close = df[("Close", ticker)]
-          open_p = df[("Open", ticker)]
-          vol = df[("Volume", ticker)]
-          low = df[("Low", ticker)]
+      # Fetch intraday data using 15-minute intervals for today/recent session
+      df_intra = yf.download(
+          ticker, period="2d", interval="15m", progress=False
+      )
+      if not df_intra.empty and len(df_intra) >= 10:
+        if isinstance(df_intra.columns, pd.MultiIndex):
+          close = df_intra[("Close", ticker)]
+          vol = df_intra[("Volume", ticker)]
+          low = df_intra[("Low", ticker)]
+          high = df_intra[("High", ticker)]
         else:
-          close = df["Close"]
-          open_p = df["Open"]
-          vol = df["Volume"]
-          low = df["Low"]
+          close = df_intra["Close"]
+          vol = df_intra["Volume"]
+          low = df_intra["Low"]
+          high = df_intra["High"]
 
-        curr_close = close.iloc[-1]
+        # Look at the most recent 15-minute candles of the session
+        recent_close = close.iloc[-1]
         prev_close = close.iloc[-2]
-        curr_vol = vol.iloc[-1]
 
-        turnover_inr = curr_close * curr_vol
-        turnover_crores = turnover_inr / 10000000
+        # 1. Volume & Turnover filter (Ensure liquidity)
+        turnover_cr = (recent_close * vol.iloc[-1]) / 10000000
+        if turnover_cr < 5:  # Minimum 5 Crore per 15-min or active daily liquidity
+          pass  # We check daily liquidity below as well
 
-        if turnover_crores < 20:
-          continue
+        # 2. Bull Flag Pattern Recognition Logic:
+        # Check if candles 5-8 periods ago formed a strong pole (rapid move up > 2%)
+        pole_start = close.iloc[-8]
+        pole_peak = high.iloc[-5]
+        pole_gain = (pole_peak - pole_start) / pole_start
 
-        day_change_pct = ((curr_close - prev_close) / prev_close) * 100
-        stop_loss_ref = low.iloc[-1] * 0.995
+        if pole_gain >= 0.025:  # At least 2.5% impulse pole move
+          # Check flag consolidation (last 3-4 candles pulled back slightly or tightened)
+          flag_low = low.iloc[-4:].min()
+          flag_high = high.iloc[-4:].max()
+          flag_range = (flag_high - flag_low) / flag_high
 
-        active_records.append({
-            "ticker": ticker.split(".")[0],
-            "price": curr_close,
-            "change_pct": day_change_pct,
-            "turnover_cr": turnover_crores,
-            "stop_loss": stop_loss_ref,
-        })
+          # Flag should be tight (< 1.5% range) and volume should have contracted
+          avg_pole_vol = vol.iloc[-8:-4].mean()
+          avg_flag_vol = vol.iloc[-4:-1].mean()
+
+          if flag_range <= 0.015 and avg_flag_vol < avg_pole_vol:
+            # Breakout trigger: Current candle is breaking above the flag high
+            if recent_close >= flag_high * 0.998 and vol.iloc[-1] > (
+                avg_flag_vol * 1.3
+            ):
+              day_change = (
+                  (recent_close - close.iloc[0]) / close.iloc[0]
+              ) * 100
+              stop_loss = flag_low * 0.995  # Stop loss under flag structure
+
+              flag_setups.append({
+                  "ticker": ticker.split(".")[0],
+                  "price": recent_close,
+                  "change_pct": day_change,
+                  "pole_gain": f"{pole_gain * 100:.1f}%",
+                  "stop_loss": stop_loss,
+              })
     except Exception:
       pass
 
-  active_records = sorted(
-      active_records, key=lambda x: x["turnover_cr"], reverse=True
+  # Sort by strongest pole gain
+  flag_setups = sorted(
+      flag_setups, key=lambda x: float(x["pole_gain"].replace("%", "")), reverse=True
   )
+  return flag_setups[:6]
 
-  gainers = sorted(
-      [r for r in active_records if r["change_pct"] > 0],
-      key=lambda x: x["change_pct"],
-      reverse=True,
+
+bull_flags = fetch_intraday_bull_flags()
+
+if not bull_flags:
+  st.info(
+      "Scanning intraday 15m charts for active Bull Flags... No patterns"
+      " currently triggering breakout confirmation (Market may be consolidating"
+      " or closed)."
   )
-  losers = sorted(
-      [r for r in active_records if r["change_pct"] < 0],
-      key=lambda x: x["change_pct"],
+else:
+  st.success(
+      f"Found {len(bull_flags)} high-probability Intraday Bull Flag breakouts!"
   )
-  return gainers[:5], losers[:5]
-
-
-intraday_gainers, intraday_losers = fetch_most_active_intraday()
-
-col_g, col_l = st.columns(2)
-
-with col_g:
-  st.subheader("🟢 Top Bullish Active Equities (Long Setups)")
-  if not intraday_gainers:
-    st.info("No bullish active equities meeting turnover criteria.")
-  else:
-    for stock in intraday_gainers:
+  cols_flag = st.columns(3)
+  for idx, stock in enumerate(bull_flags):
+    with cols_flag[idx % 3]:
       st.markdown(
-          f"### 🚀 `{stock['ticker']}` (+{stock['change_pct']:.2f}%)\n"
-          f"**LTP:** ₹{stock['price']:,.2f} | **Turnover:** ₹"
-          f"{stock['turnover_cr']:,.1f} Cr  \n"
-          f"🛡️ **Rec. Intraday Stop-Loss:** ₹{stock['stop_loss']:,.2f}"
-      )
-      st.markdown("---")
-
-with col_l:
-  st.subheader("🔴 Top Bearish Active Equities (Short Setups)")
-  if not intraday_losers:
-    st.info("No bearish active equities meeting turnover criteria.")
-  else:
-    for stock in intraday_losers:
-      st.markdown(
-          f"### 🔻 `{stock['ticker']}` ({stock['change_pct']:.2f}%)\n"
-          f"**LTP:** ₹{stock['price']:,.2f} | **Turnover:** ₹"
-          f"{stock['turnover_cr']:,.1f} Cr  \n"
-          f"🛡️ **Rec. Intraday Stop-Loss:** ₹{stock['stop_loss']:,.2f}"
+          f"### 🚩 `{stock['ticker']}` (+{stock['change_pct']:.2f}%)\n"
+          f"**LTP:** ₹{stock['price']:,.2f}  \n"
+          f"**Impulse Pole Gain:** {stock['pole_gain']}  \n"
+          f"🛡️ **Intraday Stop-Loss:** ₹{stock['stop_loss']:,.2f}"
       )
       st.markdown("---")

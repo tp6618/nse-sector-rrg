@@ -1,40 +1,56 @@
-import io
-import time
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-import requests
-import streamlit as st
-import yfinance as yf
+# Ensure columns are strictly unique
+    ratio_df = ratio_df.loc[:, ~ratio_df.columns.duplicated()]
+    mom_df = mom_df.loc[:, ~mom_df.columns.duplicated()]
 
-st.set_page_config(
-    page_title="Advanced NSE Multi-Screener & Intraday Engine",
-    page_icon="📈",
-    layout="wide",
-)
+    # Quadrant Summary Cards for All Sectors
+    st.subheader("📊 All Sectors Quadrant Summary")
+    latest_r = ratio_df.iloc[-1]
+    latest_m = mom_df.iloc[-1]
+    lead, weak, lag, imp = [], [], [], []
 
-st.title(
-    "NSE Sector Rotation, Dual-Partition Screener & Intraday Bull Flag Engine"
-)
-st.markdown(
-    "Automatically fetches live Nifty 500 components from NSE India, evaluates"
-    " dual-partition swing setups, and scans intraday Bull Flag breakouts with"
-    " risk guardrails."
-)
+    for name in ratio_df.columns:
+      # Force scalar float conversion to avoid series overlap bugs
+      r = float(latest_r[name].iloc[0]) if isinstance(latest_r[name], pd.Series) else float(latest_r[name])
+      m = float(latest_m[name].iloc[0]) if isinstance(latest_m[name], pd.Series) else float(latest_m[name])
 
-# Sidebar UI Controls
-st.sidebar.header("Configuration")
-timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
-tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
+      if r >= 100.0 and m >= 100.0:
+        lead.append(name)
+      elif r >= 100.0 and m < 100.0:
+        weak.append(name)
+      elif r < 100.0 and m < 100.0:
+        lag.append(name)
+      else:
+        imp.append(name)
 
-if st.sidebar.button("🔄 Refresh Live Market Data"):
-  st.cache_data.clear()
-  st.success("Cache cleared! Fetching fresh live market data...")
-  time.sleep(1)
-  st.rerun()
-
-# ==========================================
-# PART 1: ALL SECTORS ROTATION CHART & SUMMARY
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+      st.markdown("#### 🟢 Leading")
+      if lead:
+        for s in lead:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
+    with c2:
+      st.markdown("#### 🔵 Improving")
+      if imp:
+        for s in imp:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
+    with c3:
+      st.markdown("#### 🟡 Weakening")
+      if weak:
+        for s in weak:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
+    with c4:
+      st.markdown("#### 🔴 Lagging")
+      if lag:
+        for s in lag:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")# PART 1: ALL SECTORS ROTATION CHART & SUMMARY
 # ==========================================
 st.header("🌐 All Sectors Rotation View")
 

@@ -8,37 +8,24 @@ import streamlit as st
 import yfinance as yf
 
 st.set_page_config(
-    page_title="Advanced NSE RRG & Multi-Screener Engine",
+    page_title="Auto-Updating Live Nifty 500 Multi-Screener",
     page_icon="📈",
     layout="wide",
 )
 
-st.title(
-    "NSE Sector Rotation (RRG), Dual-Partition Screener & Intraday Bull Flag"
-    " Engine"
-)
+st.title("NSE Sector Rotation & Live Auto-Updating Nifty 500 Screener")
 st.markdown(
-    "Professional relative rotation terminal, live Nifty 500 component"
-    " ingestion, swing screeners, and intraday breakout guardrails."
+    "Automatically fetches live Nifty 500 components from NSE India and scans"
+    " across 5 custom screeners with 52-week high, ADTV liquidity, and"
+    " Relative Strength filters."
 )
 
-# ==========================================
-# RRG SETTINGS SIDEBAR (Matching Terminal Style)
-# ==========================================
-st.sidebar.markdown("### 🎛️ RRG Settings")
+# Sidebar UI Controls
+st.sidebar.header("Configuration")
+timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
+tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-benchmark_choice = st.sidebar.selectbox(
-    "Benchmark", ["Nifty 50 (^NSEI)", "Nifty 500 (^CRSLIST)"]
-)
-benchmark_ticker = (
-    "^NSEI" if "Nifty 50 (" in benchmark_choice else "^CRSLIST"
-)
-
-timeframe = st.sidebar.radio("Timeframe", ["Daily", "Weekly"], horizontal=True)
-tail_length = st.sidebar.slider("Tail Length", 3, 15, 6)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔄 Data Controls")
+# Manual Refresh Button to clear cache and force live update
 if st.sidebar.button("🔄 Refresh Live Market Data"):
   st.cache_data.clear()
   st.success("Cache cleared! Fetching fresh live market data...")
@@ -48,8 +35,9 @@ if st.sidebar.button("🔄 Refresh Live Market Data"):
 # ==========================================
 # PART 1: ALL SECTORS ROTATION CHART & SUMMARY
 # ==========================================
-st.header("🌐 All Sectors Rotation View (RRG)")
+st.header("🌐 All Sectors Rotation View")
 
+all_sectors_benchmark = "^NSEI"
 sectors_dict = {
     "AUTO": "^CNXAUTO",
     "BANK": "^NSEBANK",
@@ -71,7 +59,7 @@ sectors_dict = {
 
 
 @st.cache_data(ttl=300)
-def fetch_rrg_data(tf, bench, items):
+def fetch_data(tf, bench, items):
   period = "1y" if tf == "Daily" else "2y"
   interval = "1d" if tf == "Daily" else "1wk"
 
@@ -105,118 +93,66 @@ def fetch_rrg_data(tf, bench, items):
   return combined_df
 
 
-data_sectors = fetch_rrg_data(timeframe, benchmark_ticker, sectors_dict)
+# Load All Sectors Data
+data_sectors = fetch_data(timeframe, all_sectors_benchmark, sectors_dict)
 
-if benchmark_ticker not in data_sectors.columns:
-  benchmark_ticker = "^NSEI"
-  data_sectors = fetch_rrg_data(timeframe, benchmark_ticker, sectors_dict)
-
-if benchmark_ticker not in data_sectors.columns:
+if all_sectors_benchmark not in data_sectors.columns:
   st.error("Benchmark data could not be retrieved.")
 else:
-  bench_series = data_sectors[benchmark_ticker]
+  bench_series = data_sectors[all_sectors_benchmark]
   ratio_df = pd.DataFrame(index=data_sectors.index)
   mom_df = pd.DataFrame(index=data_sectors.index)
 
-  # Professional JdK RS-Ratio & RS-Momentum Normalization Formula
   for name in sectors_dict.keys():
     if name in data_sectors.columns:
       sec_series = data_sectors[name]
       rs = sec_series / bench_series
       sma_rs = rs.rolling(window=14).mean()
-      rs_ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
-
-      sma_ratio = rs_ratio.rolling(window=10).mean()
-      std_ratio = rs_ratio.rolling(window=10).std()
-      rs_mom = 100 + (
-          (rs_ratio - sma_ratio) / (std_ratio.replace(0, 1))
-      ).rolling(window=5).mean()
-
-      ratio_df[name] = rs_ratio
-      mom_df[name] = rs_mom
+      ratio = 100 + ((rs - sma_rs) / sma_rs) * 100
+      momentum = 100 + ratio.diff(1)
+      ratio_df[name] = ratio
+      mom_df[name] = momentum
 
   ratio_df.dropna(inplace=True)
   mom_df.dropna(inplace=True)
 
+  # Ensure columns are strictly unique to avoid duplication bugs
   ratio_df = ratio_df.loc[:, ~ratio_df.columns.duplicated()]
   mom_df = mom_df.loc[:, ~mom_df.columns.duplicated()]
 
   if not ratio_df.empty:
     fig_sec = go.Figure()
+    fig_sec.add_hline(y=100, line_dash="dash", line_color="gray")
+    fig_sec.add_vline(x=100, line_dash="dash", line_color="gray")
 
-    # Professional RRG Terminal Background Quadrants
-    fig_sec.add_shape(
-        type="rect",
-        x0=92,
-        y0=100,
-        x1=100,
-        y1=108,
-        fillcolor="rgba(217, 237, 247, 0.4)",
-        layer="below",
-        line_width=0,
-    )
-    fig_sec.add_shape(
-        type="rect",
-        x0=100,
-        y0=100,
-        x1=114,
-        y1=108,
-        fillcolor="rgba(223, 240, 216, 0.4)",
-        layer="below",
-        line_width=0,
-    )
-    fig_sec.add_shape(
-        type="rect",
-        x0=92,
-        y0=92,
-        x1=100,
-        y1=100,
-        fillcolor="rgba(242, 222, 222, 0.4)",
-        layer="below",
-        line_width=0,
-    )
-    fig_sec.add_shape(
-        type="rect",
-        x0=100,
-        y0=92,
-        x1=114,
-        y1=100,
-        fillcolor="rgba(252, 248, 227, 0.4)",
-        layer="below",
-        line_width=0,
-    )
-
-    fig_sec.add_hline(y=100, line_dash="dash", line_color="#b0b0b0")
-    fig_sec.add_vline(x=100, line_dash="dash", line_color="#b0b0b0")
-
-    # Corner Quadrant Watermark Labels
+    # Watermarks
     fig_sec.add_annotation(
-        x=93.5,
-        y=107.2,
-        text="<b>Improving</b>",
+        x=107,
+        y=108,
+        text="<b>LEADING</b>",
         showarrow=False,
-        font=dict(size=13, color="#1d6fa5"),
+        font=dict(size=20, color="rgba(40, 167, 69, 0.25)"),
     )
     fig_sec.add_annotation(
-        x=112.5,
-        y=107.2,
-        text="<b>Leading</b>",
+        x=93,
+        y=108,
+        text="<b>IMPROVING</b>",
         showarrow=False,
-        font=dict(size=13, color="#2b8a3e"),
+        font=dict(size=20, color="rgba(0, 123, 255, 0.25)"),
     )
     fig_sec.add_annotation(
-        x=93.5,
-        y=92.8,
-        text="<b>Lagging</b>",
+        x=93,
+        y=92,
+        text="<b>LAGGING</b>",
         showarrow=False,
-        font=dict(size=13, color="#c92a2a"),
+        font=dict(size=20, color="rgba(220, 53, 69, 0.25)"),
     )
     fig_sec.add_annotation(
-        x=112.5,
-        y=92.8,
-        text="<b>Weakening</b>",
+        x=107,
+        y=92,
+        text="<b>WEAKENING</b>",
         showarrow=False,
-        font=dict(size=13, color="#e67700"),
+        font=dict(size=20, color="rgba(255, 193, 7, 0.35)"),
     )
 
     for name in ratio_df.columns:
@@ -226,28 +162,25 @@ else:
           go.Scatter(
               x=x_vals,
               y=y_vals,
-              mode="lines+markers+text",
+              mode="lines+markers",
               name=name,
-              text=[""] * (len(x_vals) - 1) + [f"  {name}"],
-              textposition="middle right",
               hovertemplate=(
-                  f"<b>{name}</b><br>Trend: %{{x:.2f}}<br>Momentum:"
+                  f"<b>{name}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum:"
                   " %{y:.2f}<extra></extra>"
               ),
               line=dict(width=2),
-              marker=dict(size=[6] * (len(x_vals) - 1) + [11], symbol="circle"),
+              marker=dict(size=[6] * (len(x_vals) - 1) + [12], symbol="circle"),
           )
       )
 
     fig_sec.update_layout(
-        title=f"All Sectors Rotation Graph (RRG) — {timeframe} View",
-        xaxis_title="Trend",
-        yaxis_title="Momentum",
-        xaxis=dict(range=[92, 114], dtick=2, gridcolor="#e5e5e5"),
-        yaxis=dict(range=[92, 108], dtick=1, gridcolor="#e5e5e5"),
-        height=700,
+        title=f"All Sectors Rotation Graph — {timeframe} View",
+        xaxis_title="RS-Ratio",
+        yaxis_title="RS-Momentum",
+        xaxis=dict(range=[90, 110]),
+        yaxis=dict(range=[90, 110]),
+        height=650,
         template="plotly_white",
-        showlegend=False,
     )
     st.plotly_chart(fig_sec, use_container_width=True)
 
@@ -281,32 +214,20 @@ else:
     c1, c2, c3, c4 = st.columns(4)
     with c1:
       st.markdown("#### 🟢 Leading")
-      if lead:
-        for s in lead:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
+      for s in lead:
+        st.markdown(f"- **{s}**")
     with c2:
       st.markdown("#### 🔵 Improving")
-      if imp:
-        for s in imp:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
+      for s in imp:
+        st.markdown(f"- **{s}**")
     with c3:
       st.markdown("#### 🟡 Weakening")
-      if weak:
-        for s in weak:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
+      for s in weak:
+        st.markdown(f"- **{s}**")
     with c4:
       st.markdown("#### 🔴 Lagging")
-      if lag:
-        for s in lag:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
+      for s in lag:
+        st.markdown(f"- **{s}**")
 
 
 # ==========================================
@@ -399,10 +320,15 @@ with col_b:
 
 
 # ==========================================
-# PART 3: DUAL-PARTITION LIVE NIFTY 500 SCREENER
+# PART 3: DUAL-PARTITION LIVE NIFTY 500 MULTI-SCREENER
 # ==========================================
 st.markdown("---")
-st.header("🔍 Auto-Updating Multi-Screener Engine (Dual Partitions)")
+st.header("🔍 Auto-Updating Live Nifty 500 Multi-Screener Engine (Dual Partitions)")
+st.markdown(
+    "Automatically fetching live components from NSE India, running dual"
+    " partitions (Partition 1: 2-10% near highs, Partition 2: 7-12% pullback"
+    " zone), verifying ADTV liquidity, relative strength, and volume dry-ups."
+)
 
 
 @st.cache_data(ttl=3600)
@@ -453,10 +379,10 @@ def run_dual_screeners():
   pullback_results = []
 
   nifty_df = yf.download(
-      benchmark_ticker, period="1y", interval="1d", progress=False
+      "^NSEI", period="1y", interval="1d", progress=False
   )
   nifty_close = (
-      nifty_df[("Close", benchmark_ticker)]
+      nifty_df[("Close", "^NSEI")]
       if isinstance(nifty_df.columns, pd.MultiIndex)
       else nifty_df["Close"]
   )
@@ -488,9 +414,10 @@ def run_dual_screeners():
         curr_vol = vol.iloc[-1]
         prev_vol = vol.iloc[-2]
 
-        high_ref = high.max()
-        pct_below_high = (high_ref - curr_close) / high_ref
+        high_52w = high.max()
+        pct_below_high = (high_52w - curr_close) / high_52w
 
+        # Dual Partition Filters
         is_near_highs = 0.02 <= pct_below_high <= 0.10
         is_pullback_zone = 0.07 <= pct_below_high <= 0.12
 
@@ -538,8 +465,8 @@ def run_dual_screeners():
             and curr_close > prev_close
         )
         s2 = (
-            curr_close >= high_ref * 0.95
-            and curr_close <= high_ref * 1.02
+            curr_close >= high_52w * 0.95
+            and curr_close <= high_52w * 1.02
             and 55 <= curr_rsi <= 80
         )
         ema_bunched = (
@@ -580,7 +507,7 @@ def run_dual_screeners():
           entry = {
               "ticker": ticker.split(".")[0],
               "price": curr_close,
-              "high_ref": high_ref,
+              "high_52w": high_52w,
               "pullback_pct": f"{pct_below_high * 100:.2f}%",
               "matches": passed_count,
               "details": f"Passed {passed_count}/5 Screeners",
@@ -606,21 +533,21 @@ def run_dual_screeners():
 
 near_highs, pullbacks = run_dual_screeners()
 
-# --- Partition 1: Near Highs (2-10%) ---
+# --- Partition 1: Near 52W Highs (2-10%) ---
 st.subheader(
-    "📈 Partition 1: Auto-Updating Screener (Near Highs: 2-10% below peak)"
+    "📈 Partition 1: Auto-Updating Screener (Near 52W Highs: 2-10% below peak)"
 )
 if not near_highs:
-  st.info("No stocks currently match the 2-10% Near Highs criteria.")
+  st.info("No stocks currently match the Partition 1 intersection criteria.")
 else:
-  st.success(f"Found {len(near_highs)} stocks in the 2-10% near-highs zone!")
+  st.success(f"Found {len(near_highs)} stocks in Partition 1!")
   cols1 = st.columns(3)
   for idx, stock in enumerate(near_highs[:9]):
     with cols1[idx % 3]:
       st.markdown(
           f"### ⭐ `{stock['ticker']}`\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**High Ref:** ₹{stock['high_ref']:,.2f}  \n"
+          f"**52W High:** ₹{stock['high_52w']:,.2f}  \n"
           f"**Distance:** {stock['pullback_pct']} below High  \n"
           f"**Status:** {stock['details']}"
       )
@@ -631,115 +558,17 @@ st.markdown("\n")
 # --- Partition 2: Pullback Zone (7-12%) ---
 st.subheader("📉 Partition 2: Auto Update Screener (7-12% Pullback Zone)")
 if not pullbacks:
-  st.info("No stocks currently match the 7-12% pullback zone criteria.")
+  st.info("No stocks currently match the Partition 2 pullback criteria.")
 else:
-  st.success(f"Found {len(pullbacks)} stocks in the 7-12% pullback zone!")
+  st.success(f"Found {len(pullbacks)} stocks in Partition 2!")
   cols2 = st.columns(3)
   for idx, stock in enumerate(pullbacks[:9]):
     with cols2[idx % 3]:
       st.markdown(
           f"### ⭐ `{stock['ticker']}`\n"
           f"**Price:** ₹{stock['price']:,.2f}  \n"
-          f"**High Ref:** ₹{stock['high_ref']:,.2f}  \n"
+          f"**52W High:** ₹{stock['high_52w']:,.2f}  \n"
           f"**Pullback Depth:** {stock['pullback_pct']} below High  \n"
           f"**Status:** {stock['details']}"
-      )
-      st.markdown("---")
-
-
-# ==========================================
-# PART 4: INTRADAY BULL FLAG SCANNER & RISK GUARDRAILS
-# ==========================================
-st.markdown("---")
-st.header("⚡ Intraday Bull Flag Breakout Scanner")
-st.markdown(
-    "Scanning today's intraday 15-minute price action for aggressive morning"
-    " impulse poles followed by tight consolidation flags and volume breakout"
-    " triggers."
-)
-
-
-@st.cache_data(ttl=300)
-def fetch_intraday_bull_flags():
-  tickers = get_nifty500_tickers()
-  flag_setups = []
-
-  for ticker in tickers:
-    try:
-      df_intra = yf.download(
-          ticker, period="2d", interval="15m", progress=False
-      )
-      if not df_intra.empty and len(df_intra) >= 10:
-        if isinstance(df_intra.columns, pd.MultiIndex):
-          close = df_intra[("Close", ticker)]
-          vol = df_intra[("Volume", ticker)]
-          low = df_intra[("Low", ticker)]
-          high = df_intra[("High", ticker)]
-        else:
-          close = df_intra["Close"]
-          vol = df_intra["Volume"]
-          low = df_intra["Low"]
-          high = df_intra["High"]
-
-        recent_close = close.iloc[-1]
-        pole_start = close.iloc[-8]
-        pole_peak = high.iloc[-5]
-        pole_gain = (pole_peak - pole_start) / pole_start
-
-        if pole_gain >= 0.025:
-          flag_low = low.iloc[-4:].min()
-          flag_high = high.iloc[-4:].max()
-          flag_range = (flag_high - flag_low) / flag_high
-
-          avg_pole_vol = vol.iloc[-8:-4].mean()
-          avg_flag_vol = vol.iloc[-4:-1].mean()
-
-          if flag_range <= 0.015 and avg_flag_vol < avg_pole_vol:
-            if recent_close >= flag_high * 0.998 and vol.iloc[-1] > (
-                avg_flag_vol * 1.3
-            ):
-              day_change = (
-                  (recent_close - close.iloc[0]) / close.iloc[0]
-              ) * 100
-              stop_loss = flag_low * 0.995
-
-              flag_setups.append({
-                  "ticker": ticker.split(".")[0],
-                  "price": recent_close,
-                  "change_pct": day_change,
-                  "pole_gain": f"{pole_gain * 100:.1f}%",
-                  "stop_loss": stop_loss,
-              })
-    except Exception:
-      pass
-
-  flag_setups = sorted(
-      flag_setups,
-      key=lambda x: float(x["pole_gain"].replace("%", "")),
-      reverse=True,
-  )
-  return flag_setups[:6]
-
-
-bull_flags = fetch_intraday_bull_flags()
-
-if not bull_flags:
-  st.info(
-      "Scanning intraday 15m charts for active Bull Flags... No patterns"
-      " currently triggering breakout confirmation (Market may be consolidating"
-      " or closed)."
-  )
-else:
-  st.success(
-      f"Found {len(bull_flags)} high-probability Intraday Bull Flag breakouts!"
-  )
-  cols_flag = st.columns(3)
-  for idx, stock in enumerate(bull_flags):
-    with cols_flag[idx % 3]:
-      st.markdown(
-          f"### 🚩 `{stock['ticker']}` (+{stock['change_pct']:.2f}%)\n"
-          f"**LTP:** ₹{stock['price']:,.2f}  \n"
-          f"**Impulse Pole Gain:** {stock['pole_gain']}  \n"
-          f"🛡️ **Intraday Stop-Loss:** ₹{stock['stop_loss']:,.2f}"
       )
       st.markdown("---")

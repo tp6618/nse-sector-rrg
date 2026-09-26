@@ -1,56 +1,40 @@
-# Ensure columns are strictly unique
-    ratio_df = ratio_df.loc[:, ~ratio_df.columns.duplicated()]
-    mom_df = mom_df.loc[:, ~mom_df.columns.duplicated()]
+import io
+import time
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import requests
+import streamlit as st
+import yfinance as yf
 
-    # Quadrant Summary Cards for All Sectors
-    st.subheader("📊 All Sectors Quadrant Summary")
-    latest_r = ratio_df.iloc[-1]
-    latest_m = mom_df.iloc[-1]
-    lead, weak, lag, imp = [], [], [], []
+st.set_page_config(
+    page_title="Advanced NSE Multi-Screener & Intraday Engine",
+    page_icon="📈",
+    layout="wide",
+)
 
-    for name in ratio_df.columns:
-      # Force scalar float conversion to avoid series overlap bugs
-      r = float(latest_r[name].iloc[0]) if isinstance(latest_r[name], pd.Series) else float(latest_r[name])
-      m = float(latest_m[name].iloc[0]) if isinstance(latest_m[name], pd.Series) else float(latest_m[name])
+st.title(
+    "NSE Sector Rotation, Dual-Partition Screener & Intraday Bull Flag Engine"
+)
+st.markdown(
+    "Automatically fetches live Nifty 500 components from NSE India, evaluates"
+    " dual-partition swing setups, and scans intraday Bull Flag breakouts with"
+    " risk guardrails."
+)
 
-      if r >= 100.0 and m >= 100.0:
-        lead.append(name)
-      elif r >= 100.0 and m < 100.0:
-        weak.append(name)
-      elif r < 100.0 and m < 100.0:
-        lag.append(name)
-      else:
-        imp.append(name)
+# Sidebar UI Controls
+st.sidebar.header("Configuration")
+timeframe = st.sidebar.selectbox("Select Timeframe View", ["Daily", "Weekly"])
+tail_length = st.sidebar.slider("Tail Length (History)", 3, 15, 5)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-      st.markdown("#### 🟢 Leading")
-      if lead:
-        for s in lead:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
-    with c2:
-      st.markdown("#### 🔵 Improving")
-      if imp:
-        for s in imp:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
-    with c3:
-      st.markdown("#### 🟡 Weakening")
-      if weak:
-        for s in weak:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")
-    with c4:
-      st.markdown("#### 🔴 Lagging")
-      if lag:
-        for s in lag:
-          st.markdown(f"- **{s}**")
-      else:
-        st.markdown("- *None*")# PART 1: ALL SECTORS ROTATION CHART & SUMMARY
+if st.sidebar.button("🔄 Refresh Live Market Data"):
+  st.cache_data.clear()
+  st.success("Cache cleared! Fetching fresh live market data...")
+  time.sleep(1)
+  st.rerun()
+
+# ==========================================
+# PART 1: ALL SECTORS ROTATION CHART & SUMMARY
 # ==========================================
 st.header("🌐 All Sectors Rotation View")
 
@@ -132,6 +116,10 @@ else:
   ratio_df.dropna(inplace=True)
   mom_df.dropna(inplace=True)
 
+  # Ensure columns are strictly unique to avoid duplicates
+  ratio_df = ratio_df.loc[:, ~ratio_df.columns.duplicated()]
+  mom_df = mom_df.loc[:, ~mom_df.columns.duplicated()]
+
   if not ratio_df.empty:
     fig_sec = go.Figure()
     fig_sec.add_hline(y=100, line_dash="dash", line_color="gray")
@@ -193,18 +181,29 @@ else:
     )
     st.plotly_chart(fig_sec, use_container_width=True)
 
+    # Quadrant Summary Cards for All Sectors
     st.subheader("📊 All Sectors Quadrant Summary")
     latest_r = ratio_df.iloc[-1]
     latest_m = mom_df.iloc[-1]
     lead, weak, lag, imp = [], [], [], []
 
     for name in ratio_df.columns:
-      r, m = latest_r[name], latest_m[name]
-      if r >= 100 and m >= 100:
+      r = (
+          float(latest_r[name].iloc[0])
+          if isinstance(latest_r[name], pd.Series)
+          else float(latest_r[name])
+      )
+      m = (
+          float(latest_m[name].iloc[0])
+          if isinstance(latest_m[name], pd.Series)
+          else float(latest_m[name])
+      )
+
+      if r >= 100.0 and m >= 100.0:
         lead.append(name)
-      elif r >= 100 and m < 100:
+      elif r >= 100.0 and m < 100.0:
         weak.append(name)
-      elif r < 100 and m < 100:
+      elif r < 100.0 and m < 100.0:
         lag.append(name)
       else:
         imp.append(name)
@@ -212,20 +211,32 @@ else:
     c1, c2, c3, c4 = st.columns(4)
     with c1:
       st.markdown("#### 🟢 Leading")
-      for s in lead:
-        st.markdown(f"- **{s}**")
+      if lead:
+        for s in lead:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
     with c2:
       st.markdown("#### 🔵 Improving")
-      for s in imp:
-        st.markdown(f"- **{s}**")
+      if imp:
+        for s in imp:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
     with c3:
       st.markdown("#### 🟡 Weakening")
-      for s in weak:
-        st.markdown(f"- **{s}**")
+      if weak:
+        for s in weak:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
     with c4:
       st.markdown("#### 🔴 Lagging")
-      for s in lag:
-        st.markdown(f"- **{s}**")
+      if lag:
+        for s in lag:
+          st.markdown(f"- **{s}**")
+      else:
+        st.markdown("- *None*")
 
 
 # ==========================================
@@ -585,7 +596,6 @@ def fetch_intraday_bull_flags():
 
   for ticker in tickers:
     try:
-      # Fetch intraday data using 15-minute intervals for today/recent session
       df_intra = yf.download(
           ticker, period="2d", interval="15m", progress=False
       )
@@ -601,40 +611,27 @@ def fetch_intraday_bull_flags():
           low = df_intra["Low"]
           high = df_intra["High"]
 
-        # Look at the most recent 15-minute candles of the session
         recent_close = close.iloc[-1]
-        prev_close = close.iloc[-2]
-
-        # 1. Volume & Turnover filter (Ensure liquidity)
-        turnover_cr = (recent_close * vol.iloc[-1]) / 10000000
-        if turnover_cr < 5:  # Minimum 5 Crore per 15-min or active daily liquidity
-          pass  # We check daily liquidity below as well
-
-        # 2. Bull Flag Pattern Recognition Logic:
-        # Check if candles 5-8 periods ago formed a strong pole (rapid move up > 2%)
         pole_start = close.iloc[-8]
         pole_peak = high.iloc[-5]
         pole_gain = (pole_peak - pole_start) / pole_start
 
-        if pole_gain >= 0.025:  # At least 2.5% impulse pole move
-          # Check flag consolidation (last 3-4 candles pulled back slightly or tightened)
+        if pole_gain >= 0.025:
           flag_low = low.iloc[-4:].min()
           flag_high = high.iloc[-4:].max()
           flag_range = (flag_high - flag_low) / flag_high
 
-          # Flag should be tight (< 1.5% range) and volume should have contracted
           avg_pole_vol = vol.iloc[-8:-4].mean()
           avg_flag_vol = vol.iloc[-4:-1].mean()
 
           if flag_range <= 0.015 and avg_flag_vol < avg_pole_vol:
-            # Breakout trigger: Current candle is breaking above the flag high
             if recent_close >= flag_high * 0.998 and vol.iloc[-1] > (
                 avg_flag_vol * 1.3
             ):
               day_change = (
                   (recent_close - close.iloc[0]) / close.iloc[0]
               ) * 100
-              stop_loss = flag_low * 0.995  # Stop loss under flag structure
+              stop_loss = flag_low * 0.995
 
               flag_setups.append({
                   "ticker": ticker.split(".")[0],
@@ -646,9 +643,10 @@ def fetch_intraday_bull_flags():
     except Exception:
       pass
 
-  # Sort by strongest pole gain
   flag_setups = sorted(
-      flag_setups, key=lambda x: float(x["pole_gain"].replace("%", "")), reverse=True
+      flag_setups,
+      key=lambda x: float(x["pole_gain"].replace("%", "")),
+      reverse=True,
   )
   return flag_setups[:6]
 
